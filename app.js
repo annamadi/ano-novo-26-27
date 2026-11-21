@@ -401,10 +401,10 @@
       $("#login-form").addEventListener("submit", async e => {
         e.preventDefault(); $("#login-err").textContent = "";
         const slug = $("#who").value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (!slug) { $("#login-err").textContent = "Digite seu nome."; return; }
+        if (!slug) { $("#login-err").textContent = "Digite seu username."; return; }
         const { data: auth, error } = await client.auth.signInWithPassword({ email: `${slug}@${CFG.loginDomain}`, password: $("#pw").value });
         if (!error) setWho(auth.user);
-        if (error) { $("#login-err").textContent = /invalid/i.test(error.message) ? "Nome ou senha não conferem. Use só o primeiro nome, como foi combinado no grupo." : "Não foi possível entrar. Confira a conexão e tente de novo."; return; }
+        if (error) { $("#login-err").textContent = /invalid/i.test(error.message) ? "Username ou senha não conferem. Confira com o grupo e tente de novo." : "Não foi possível entrar. Confira a conexão e tente de novo."; return; }
         start();
       });
     } else start();
