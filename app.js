@@ -100,14 +100,14 @@
   }
   function add(table, row, force = true) { S[table].push(row); persist(table, row); render(force); return row; }
   function removeLocal(table, id) { const i = S[table].findIndex(r => r.id === id); if (i >= 0) S[table].splice(i, 1); }
-  const KIND = { recipes: "Receita", ingredients: "Ingrediente", activities: "Atividade", extras: "Item", pendencias: "Pendência", recipe_items: "Ingrediente de receita" };
+  const KIND = { recipes: "Receita", ingredients: "Ingrediente", activities: "Atividade", extras: "Item", pendencias: "Pendência", recipe_items: "Ingrediente de receita", comments: "Comentário", people: "Pessoa" };
   function remove(table, id) {
     const row = get(table, id); if (!row) return;
     const pay = { [table]: [row] };
     if (table === "recipes") { pay.recipe_items = S.recipe_items.filter(r => r.recipe_id === id); pay.menu = S.menu.filter(r => r.recipe_id === id); pay.pendencias = S.pendencias.filter(r => r.recipe_id === id); }
     if (table === "ingredients") pay.recipe_items = S.recipe_items.filter(r => r.ingredient_id === id);
     if (table === "activities") pay.extras = S.extras.filter(r => r.activity_id === id);
-    let label = row.name || row.item || row.subject || "";
+    let label = row.name || row.item || row.subject || (row.body ? `Comentário: ${String(row.body).slice(0, 40)}` : "");
     if (table === "recipe_items") label = `${(get("ingredients", row.ingredient_id) || {}).name || "Item"} em ${(get("recipes", row.recipe_id) || {}).name || "receita"}`;
     const keep = KIND[table] && !noTrash;
     let tid = null;
@@ -118,9 +118,9 @@
   }
   async function restore(id) {
     const t = get("trash", id); if (!t) return;
-    const ok = { recipe_items: r => get("recipes", r.recipe_id) && get("ingredients", r.ingredient_id), menu: r => get("recipes", r.recipe_id) && get("days", r.day_id) };
+    const ok = { recipe_items: r => get("recipes", r.recipe_id) && get("ingredients", r.ingredient_id), menu: r => get("recipes", r.recipe_id) && get("days", r.day_id), comments: r => get("pendencias", r.pend_id) };
     let skipped = 0;
-    for (const tb of ["ingredients", "recipes", "activities", "recipe_items", "menu", "extras", "pendencias"]) for (const r of (t.payload[tb] || [])) {
+    for (const tb of ["people", "ingredients", "recipes", "activities", "recipe_items", "menu", "extras", "pendencias", "comments"]) for (const r of (t.payload[tb] || [])) {
       if (ok[tb] && !ok[tb](r)) { skipped++; continue; }
       if (tb === "extras" && r.activity_id && !get("activities", r.activity_id)) r.activity_id = null;
       if (tb === "pendencias" && r.recipe_id && !get("recipes", r.recipe_id)) r.recipe_id = null;
@@ -953,7 +953,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "back") { ui.back = null; go("menu"); }
     else if (act === "open-recipe") { ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
-    else if (act === "del") { const safe = KIND[el.dataset.t] && !noTrash; if (safe || !el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
+    else if (act === "del") remove(el.dataset.t, el.dataset.id);
     else if (act === "bulk-owner") {
       const b = bulk.get(el.dataset.key), who2 = el.closest(".bulk").querySelector("select").value; if (!b) return;
       let n = 0;
