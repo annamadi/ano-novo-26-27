@@ -12,8 +12,10 @@
   const WHEN = ["Black Friday (27/11)", "Antecipado, se congelar", "Semana da viagem (até 26/12)",
     "Fresco / repor lá", "A confirmar", "Alguém leva pronto", "Compra à parte"];
 
+  const HOME = "Alguém leva pronto";
+  const isHome = i => !!i.from_home || i.when_buy === HOME;
   const S = Object.fromEntries(TABLES.map(t => [t, []]));
-  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", tWho: "", tStatus: "", mStatus: "", mSector: "", q: "", me: "" };
+  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", fSector: "", fStore: "", fWhen: "", fType: "", showF: false, tWho: "", tStatus: "", mStatus: "", mSector: "", q: "", me: "" };
   if (!TABS.includes(ui.tab)) ui.tab = "menu";
   let client = null, renderPending = false, needsSetup = false, revMap = new Map();
 
@@ -67,7 +69,7 @@
         else if (OPTIONAL.has(t)) { needsSetup = true; S[t] = []; }
         else throw r.error;
       });
-      if ((S.recipes[0] && !("reviewed" in S.recipes[0])) || (S.ingredients[0] && !("paid" in S.ingredients[0]))) needsSetup = true;
+      if ((S.recipes[0] && !("reviewed" in S.recipes[0])) || (S.ingredients[0] && !("paid" in S.ingredients[0])) || (S.extras[0] && !("store" in S.extras[0]))) needsSetup = true;
       client.channel("an-all").on("postgres_changes", { event: "*", schema: "public" }, p => {
         const t = p.table.startsWith(PREFIX) ? p.table.slice(PREFIX.length) : null;
         if (!t || !S[t]) return;
@@ -148,7 +150,7 @@
     if (ui.tab === "shop" && ui.q) filterShop();
   }
   const datalists = () => `<datalist id="dl-ings">${S.ingredients.map(i => `<option value="${esc(i.name)}">`).join("")}</datalist>
-    <datalist id="dl-stores">${[...new Set(S.ingredients.map(i => i.store).filter(Boolean))].sort().map(o => `<option value="${esc(o)}">`).join("")}</datalist>
+    <datalist id="dl-stores">${[...new Set([...S.ingredients, ...S.extras].map(i => i.store).filter(Boolean))].sort().map(o => `<option value="${esc(o)}">`).join("")}</datalist>
     <datalist id="dl-sectors">${[...new Set(S.ingredients.map(i => i.sector).filter(Boolean))].sort().map(o => `<option value="${esc(o)}">`).join("")}</datalist>`;
 
   const inp = (t, id, f, val, extra = "") => `<input data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" value="${esc(val)}" ${extra}>`;
@@ -166,7 +168,7 @@
     const cur = owners(v), names = [...new Set([...peopleNames(), ...cur.filter(n => n !== "Todos")])];
     const box = (n, on) => `<label class="chk"><input type="checkbox" data-act="owner" data-t="${t}" data-id="${id}" data-name="${esc(n)}" ${on ? "checked" : ""}><span>${esc(n)}</span></label>`;
     return `<div class="pickpanel">${box("Todos", cur.includes("Todos"))}${names.map(n => box(n, cur.includes(n))).join("")}
-      ${names.length ? "" : `<p class="hint">Cadastre as pessoas do grupo na aba Minha lista.</p>`}
+      <p class="hint">Falta alguém? Adicione em "Pessoas do grupo", no fim da aba Minha lista.</p>
       <button type="button" class="ghost" data-act="open" data-key="own-${id}">Pronto</button></div>`;
   }
   const money = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -178,19 +180,20 @@
       ${inp("extras", e.id, "item", e.item, 'aria-label="Item"')}
       <button class="x" data-act="del" data-t="extras" data-id="${e.id}" aria-label="Excluir ${esc(e.item)}">×</button>
       <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}
-        ${e.buy ? `<label class="paid">R$ <input data-act="set" data-t="extras" data-id="${e.id}" data-f="paid" data-num="1" value="${esc(numIn(e.paid))}" inputmode="decimal" placeholder="pago" aria-label="Valor pago"></label>` : ""}
+        ${e.buy ? `<label class="paid">R$ <input data-act="set" data-t="extras" data-id="${e.id}" data-f="paid" data-num="1" value="${esc(numIn(e.paid))}" inputmode="decimal" placeholder="pago" aria-label="Valor pago"></label>
+        <input class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="store" value="${esc(e.store)}" list="dl-stores" placeholder="Onde comprar" aria-label="Local de compra">` : ""}
         ${a ? `<span class="tag">${esc(a.name)}</span>` : ""}</div>
       ${pickPanel("extras", e.id, e.owner)}
     </li>`;
   }
 
   /* listas: tudo que é comprar vai para Compras, tudo que é levar vai para Levar */
-  const GROUPS = { when_buy: "Quando comprar", sector: "Categoria", store: "Local de compra", owner: "Responsável" };
+  const GROUPS = { when_buy: "Quando comprar", sector: "Categoria", store: "Local de compra", owner: "Responsável", type: "Comida ou item" };
   const NONE = { when_buy: "Sem data definida", sector: "Sem categoria", store: "Sem local definido", owner: "Sem responsável" };
   const isDone = en => en.k === "i" ? !!en.r.bought : !!en.r.done;
   const nameOf = en => en.k === "i" ? en.r.name : en.r.item;
-  const buyEntries = tot => [...S.ingredients.filter(i => tot.has(i.id) && !i.from_home).map(r => ({ k: "i", r })), ...S.extras.filter(e => e.buy).map(r => ({ k: "x", r }))];
-  const takeEntries = tot => [...S.ingredients.filter(i => tot.has(i.id) && i.from_home).map(r => ({ k: "i", r })), ...S.extras.filter(e => !e.buy).map(r => ({ k: "x", r }))];
+  const buyEntries = tot => [...S.ingredients.filter(i => tot.has(i.id) && !isHome(i)).map(r => ({ k: "i", r })), ...S.extras.filter(e => e.buy).map(r => ({ k: "x", r }))];
+  const takeEntries = tot => [...S.ingredients.filter(i => tot.has(i.id) && isHome(i)).map(r => ({ k: "i", r })), ...S.extras.filter(e => !e.buy).map(r => ({ k: "x", r }))];
   function keyOf(en, g) {
     if (g === "origin") {
       if (en.k === "i") return "Comida que vem de casa";
@@ -198,6 +201,8 @@
       return a ? "Entretenimento: " + a.name : "Itens de uso geral";
     }
     if (g === "owner") return en.r.owner || NONE.owner;
+    if (g === "type") return en.k === "i" ? "Comida" : "Itens";
+    if (g === "store") return en.r.store || NONE.store;
     if (en.k === "i") return en.r[g] || NONE[g];
     if (g === "sector") return en.r.activity_id ? "Entretenimento" : "Uso geral";
     return NONE[g];
@@ -208,6 +213,9 @@
     if (f.status && (f.status === "done") !== isDone(en)) return false;
     if (f.rev && (en.k !== "i" || (f.rev === "ok") === revMap.has(en.r.id))) return false;
     if (f.sector && keyOf(en, "sector") !== f.sector) return false;
+    if (f.store && keyOf(en, "store") !== f.store) return false;
+    if (f.when && keyOf(en, "when_buy") !== f.when) return false;
+    if (f.type && keyOf(en, "type") !== f.type) return false;
     return true;
   }
   function groupList(entries, g, tot, tag = "h2") {
@@ -327,17 +335,27 @@
   function vShop() {
     const tot = shopping(), all = buyEntries(tot);
     const unused = S.ingredients.filter(i => !tot.has(i.id)).sort((a, b) => a.name.localeCompare(b.name, "pt"));
-    const shown = all.filter(en => passF(en, { who: ui.fWho, status: ui.fStatus, rev: ui.fRev }));
+    const vals = g => [...new Set(all.map(en => keyOf(en, g)))].sort((x, y) => g === "when_buy" ? ((WHEN.indexOf(x) + 99) % 99) - ((WHEN.indexOf(y) + 99) % 99) : (x === NONE[g]) - (y === NONE[g]) || x.localeCompare(y, "pt"));
+    const FK = { fSector: "sector", fStore: "store", fWhen: "when_buy", fType: "type" };
+    for (const k in FK) if (ui[k] && !vals(FK[k]).includes(ui[k])) ui[k] = "";
+    const shown = all.filter(en => passF(en, { who: ui.fWho, status: ui.fStatus, rev: ui.fRev, sector: ui.fSector, store: ui.fStore, when: ui.fWhen, type: ui.fType }));
+    const active = ["fWho", "fRev", "fSector", "fStore", "fWhen", "fType"].filter(k => ui[k]).length;
+    const pick = (k, all0) => sel(k, [["", all0], ...vals(FK[k]).map(x => [x, x])]);
     const paid = paidSum(all);
     return `<div class="shopbar">
       <input type="search" id="shop-q" placeholder="Buscar item" value="${esc(ui.q)}" aria-label="Buscar item">
       <label class="fld">Agrupar por ${sel("group", Object.entries(GROUPS))}</label>
-      <label class="fld">Pessoa ${sel("fWho", whoOpts())}</label>
       <label class="fld">Situação ${sel("fStatus", [["", "Tudo"], ["todo", "Falta comprar"], ["done", "Já comprado"]])}</label>
-      <label class="fld">Revisão ${sel("fRev", [["", "Tudo"], ["ok", "Receitas revisadas"], ["todo", "Receita a revisar"]])}</label>
+      <button class="btn fbtn" data-act="ui-set" data-f="showF" data-v="${ui.showF ? "" : "1"}" aria-expanded="${!!ui.showF}">${ui.showF ? "Esconder filtros" : "Filtros"}${active ? ` (${active})` : ""}</button>
+      ${ui.showF ? `<label class="fld">Pessoa ${sel("fWho", whoOpts())}</label>
+      <label class="fld">Categoria ${pick("fSector", "Todas")}</label>
+      <label class="fld">Local de compra ${pick("fStore", "Todos")}</label>
+      <label class="fld">Quando comprar ${pick("fWhen", "Qualquer momento")}</label>
+      <label class="fld">Comida ou item ${pick("fType", "Os dois")}</label>
+      <label class="fld">Revisão ${sel("fRev", [["", "Tudo"], ["ok", "Receitas revisadas"], ["todo", "Receita a revisar"]])}</label>` : ""}
     </div>
     <p class="hint">${all.filter(isDone).length} de ${all.length} itens comprados${paid ? `, R$ ${money.format(paid)} pagos até agora` : ""}.
-      ${ui.fWho || ui.fStatus || ui.fRev ? `Mostrando ${shown.length}. <button class="ghost" data-act="clear-filters">Limpar filtros</button>` : ""}</p>
+      ${active || ui.fStatus ? `Mostrando ${shown.length}. <button class="ghost" data-act="clear-filters">Limpar filtros</button>` : ""}</p>
     ${groupList(shown, ui.group, tot) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
     <form class="newrow" data-form="add-extra" data-buy="1"><input name="item" placeholder="Adicionar compra que não é comida" required><button class="btn">Adicionar</button></form>
     <p class="hint">O que vem de casa fica na aba Levar. Itens de Levar e Entretenimento marcados com "Precisa comprar" aparecem aqui.</p>
@@ -348,11 +366,11 @@
   function vItem(i, e, g) {
     const open = ui.open.has(i.id), done = i.bought, pend = revMap.get(i.id);
     return `<li class="item ${done ? "done" : ""}" data-name="${esc(norm(i.name))}">
-      <input type="checkbox" class="big" data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought" ${i.bought ? "checked" : ""} aria-label="${i.from_home ? "Separado" : "Comprado"}: ${esc(i.name)}">
+      <input type="checkbox" class="big" data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought" ${i.bought ? "checked" : ""} aria-label="${isHome(i) ? "Separado" : "Comprado"}: ${esc(i.name)}">
       <button class="imain" data-act="open" data-key="${i.id}" aria-expanded="${open}">
         <span class="iname2">${esc(i.name)}</span><span class="iqty2">${esc(fmtQty(e.qty, i.unit))}</span>
         <span class="isub">${esc(i.buy_hint)}</span>
-        <span class="chips">${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${g !== "sector" && i.sector ? `<span class="tag">${esc(i.sector)}</span>` : ""}${g !== "when_buy" && i.when_buy && !i.from_home ? `<span class="tag when">${esc(i.when_buy)}</span>` : ""}${g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}</span>
+        <span class="chips">${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${g !== "sector" && i.sector ? `<span class="tag">${esc(i.sector)}</span>` : ""}${g !== "when_buy" && i.when_buy && !isHome(i) ? `<span class="tag when">${esc(i.when_buy)}</span>` : ""}${g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}</span>
       </button>
       ${open ? `<div class="ibody">
         <div class="grid2">
@@ -365,7 +383,7 @@
           <label class="fld">Valor pago (R$)<input data-act="set" data-t="ingredients" data-id="${i.id}" data-f="paid" data-num="1" value="${esc(numIn(i.paid))}" inputmode="decimal" placeholder="0,00"></label>
           <label class="fld">Local de compra${inp("ingredients", i.id, "store", i.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
         </div>
-        ${chk("ingredients", i.id, "from_home", i.from_home, "Vem de casa (alguém leva, não precisa comprar; vai para a aba Levar)")}
+        ${chk("ingredients", i.id, "from_home", isHome(i), "Vem de casa (alguém leva, não precisa comprar; vai para a aba Levar)")}
         <label class="fld">Observação${area("ingredients", i.id, "note", i.note, "Marca, tipo, onde achar")}</label>
         ${pend ? `<p class="uses todo">Falta revisar: ${pend.map(esc).join(", ")}. Confirme a receita antes de comprar.</p>` : ""}
         <p class="uses">Usado em: ${e.uses.map(u => `${esc(u.name)} (${esc(fmtQty(u.qty, i.unit))}${u.times > 1 ? " × " + u.times : ""})`).join("; ")}</p>
@@ -460,7 +478,7 @@
   const num = v => { const n = parseFloat(String(v).replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
   function ensureIngredient(name, unit) {
     const found = findIng(name); if (found) return found;
-    const ing = { id: uid(), name: name.trim(), unit: (unit || "un").trim() || "un", store: "", paid: 0, sector: "Mercado", when_buy: "Semana da viagem (até 26/12)", buy_hint: "", bought: false, from_home: false, owner: "", note: "" };
+    const ing = { id: uid(), name: name.trim(), unit: (unit || "un").trim() || "un", sector: "Mercado", when_buy: "Semana da viagem (até 26/12)", buy_hint: "", bought: false, from_home: false, owner: "", note: "" };
     S.ingredients.push(ing); persist("ingredients", ing);
     toast(`Ingrediente novo criado: ${ing.name}.`);
     return ing;
@@ -480,6 +498,10 @@
         patch.name = v;
       }
       if (["recipes", "extras", "activities"].includes(t) && (f === "name" || f === "item") && !String(v).trim()) return render(true);
+      if (t === "ingredients" && f === "when_buy") patch.from_home = v === HOME;
+      if (t === "ingredients" && f === "from_home") { const row = get(t, id); if (v) patch.when_buy = HOME; else if (row && row.when_buy === HOME) patch.when_buy = "A confirmar"; }
+      const moved = t === "ingredients" && f === "when_buy" && (v === HOME) !== isHome(get(t, id) || {});
+      if (moved) toast(v === HOME ? "Foi para a lista de levar." : "Foi para a lista de compras.");
       if (ui.tab !== "fun" && ((t === "extras" && f === "buy") || (t === "ingredients" && f === "from_home"))) toast((t === "extras") === !!v ? "Foi para a lista de compras." : "Foi para a lista de levar.");
       update(t, id, patch, force);
     } else if (act === "owner") {
@@ -523,7 +545,7 @@
     else if (act === "del") { if (!el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
     else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
     else if (act === "ui-set") { ui[el.dataset.f] = el.dataset.v; render(true); }
-    else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ""; render(true); }
+    else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ""; render(true); }
     else if (act === "logout") { client.auth.signOut().then(() => location.reload()); }
   });
   view.addEventListener("submit", e => {
@@ -540,7 +562,7 @@
     } else if (kind === "add-pend") {
       add("pendencias", { id: uid(), kind: "Dúvida", subject: v("subject"), detail: v("detail"), answer: "", done: false, pos: nextPos("pendencias") });
     } else if (kind === "add-extra") {
-      add("extras", { id: uid(), grp: "Levar", item: v("item"), owner: "", done: false, buy: f.dataset.buy === "1", paid: 0, activity_id: f.dataset.activity || null, pos: nextPos("extras") });
+      add("extras", { id: uid(), grp: "Levar", item: v("item"), owner: "", done: false, buy: f.dataset.buy === "1", activity_id: f.dataset.activity || null, pos: nextPos("extras") });
     } else if (kind === "new-activity") {
       const a = { id: uid(), name: v("name"), notes: "", pos: nextPos("activities") };
       ui.open.add(a.id); add("activities", a);

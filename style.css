@@ -162,6 +162,8 @@ h3 { font: 700 1rem var(--body); margin: 18px 0 2px; color: var(--pool-deep); }
 .pickpanel { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 0 18px; align-items: center; background: var(--water); border-radius: 12px; padding: 6px 12px; margin-top: 6px; font-weight: 400; color: var(--ink); font-size: 1rem; }
 .ibody .pickpanel { background: #fff; }
 .pickpanel .hint { flex: 1 1 100%; }
+.fbtn { align-self: end; flex: 1 1 150px; }
+.xstore { width: 150px !important; min-height: 36px !important; padding: 4px 8px !important; }
 .tag.when { background: #EDE7FF; color: #45308A; }
 h3.grp { display: flex; align-items: baseline; gap: 8px; margin-top: 18px; }
 h3 small { font: 600 .82rem var(--body); color: var(--muted); }

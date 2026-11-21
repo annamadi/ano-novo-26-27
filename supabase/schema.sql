@@ -88,6 +88,7 @@ create table if not exists an_extras (
   done boolean not null default false,
   buy boolean not null default false,
   paid numeric not null default 0,
+  store text not null default '',
   activity_id uuid references an_activities(id) on delete cascade,
   pos double precision not null default 0
 );
