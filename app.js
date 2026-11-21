@@ -240,11 +240,13 @@
     $("#sub").hidden = sec !== "plano";
     $("#top").hidden = ui.tab === "start";
     document.querySelectorAll("#sub button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
-    const y = window.scrollY;
+    const y = window.scrollY, shOld = view.querySelector(".sheet"), shY = shOld ? shOld.scrollTop : 0;
     revMap = unreviewed(); bulk.clear();
     view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-06.sql).</p>` : "") +
       ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
     window.scrollTo(0, y);
+    const shNew = view.querySelector(".sheet"); if (shNew) shNew.scrollTop = shY;
+    document.body.classList.toggle("locked", !!shNew);
     view.querySelectorAll("input[placeholder]:not([aria-label])").forEach(i => { if (!i.closest("label")) i.setAttribute("aria-label", i.placeholder); });
     $("#top").innerHTML = ui.tab === "start" ? "" : header();
     if (ui.tab === "shop" && ui.q) filterShop();
@@ -273,7 +275,7 @@
   function header() {
     const st = headStat(shopping()), pct = st.n ? Math.round(100 * st.d / st.n) : 0;
     return `<div class="top-in">
-      <div class="top-row"><span>Ano Novo 26/27</span>${client ? `<span class="acct">${esc(who)}<button class="link" data-go="cfg">Ajustes</button></span>` : `<span>modo local, só neste navegador</span>`}</div>
+      <div class="top-row"><button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg>Início</button>${client ? `<span class="acct">${esc(who)}<button class="link" data-go="cfg">Ajustes</button></span>` : `<span>modo local</span>`}</div>
       <h1>${TITLE[ui.tab]}</h1>
       <p class="status">${esc(st.text)}</p>
       <div class="meter" role="img" aria-label="${pct}% concluído"><i style="width:${pct}%"></i></div>
@@ -396,6 +398,29 @@
     }).join("");
   }
 
+  function daySheet(d) {
+    if (!d) return "";
+    const L = dayLabel(d, true), entries = S.menu.filter(m => m.day_id === d.id).sort(byPos);
+    return `<div class="sheet-bg" data-act="sheet-close"></div>
+    <section class="sheet" role="dialog" aria-modal="true" aria-label="Cardápio de ${L.wk} ${L.dd}">
+      <header><h2><b>${L.dd}</b> ${L.wk}, ${L.mon}</h2><button class="btn" data-act="sheet-close">Fechar</button></header>
+<div class="day-body">
+          ${entries.map(m => `<small class="cat">${esc((get("recipes", m.recipe_id) || {}).block || "")}</small><div class="entry">
+            <select data-act="set" data-t="menu" data-id="${m.id}" data-f="recipe_id" aria-label="Prato do dia">${recipeOptions(m.recipe_id)}</select>
+            <button class="ghost" data-act="open-recipe" data-id="${m.recipe_id}">Ver receita</button>
+            <button class="x" data-act="del" data-t="menu" data-id="${m.id}" aria-label="Tirar do dia">×</button>
+          </div>`).join("") || `<p class="empty">Nenhum prato neste dia.</p>`}
+          <select class="adder" data-act="menu-add" data-day="${d.id}" aria-label="Adicionar prato ao dia"><option value="">Adicionar prato ou sobremesa…</option>${recipeOptions()}</select>
+          <div class="meta">
+            <label class="num">Pessoas ${inp("days", d.id, "people", d.people, 'type="number" min="0" inputmode="numeric"')}</label>
+            ${chk("days", d.id, "veg_guest", d.veg_guest, "Precisa de opção vegetariana")}
+          </div>
+          ${d.veg_guest ? `<label class="fld vegopt">Notas da opção vegetariana${area("days", d.id, "veg_option", d.veg_option, "O que muda no prato deste dia")}<span class="note">Para os ingredientes entrarem nas compras, crie uma receita do tipo Opção vegetariana e adicione a este dia.</span></label>` : ""}
+          <label class="fld">Observações${area("days", d.id, "notes", d.notes, "Lembretes do dia")}</label>
+        </div>
+    </section>`;
+  }
+
   function vMenu() {
     const days = [...S.days].sort((a, b) => a.date.localeCompare(b.date));
     const dinnerIdeas = S.recipes.filter(r => (r.block === "Jantar" || r.block === VEG) && recipeCount(r) === 0).sort(byPos);
@@ -416,28 +441,14 @@
       <button data-act="ui-set" data-f="menuView" data-v="cal" aria-pressed="${ui.menuView === "cal"}">Calendário</button>
     </div>
     ${ui.menuView === "cal" ? cal() : `<section class="days">${days.map(d => {
-      const L = dayLabel(d, true), open = ui.open.has("d-" + d.id);
-      const entries = S.menu.filter(m => m.day_id === d.id).sort(byPos), ds = names(d);
+      const L = dayLabel(d, true), ds = names(d);
       return `<article class="day ${d.veg_guest ? "veg" : ""}" id="d-${d.id}">
-        <button class="day-h chev" data-act="open" data-key="d-${d.id}" aria-expanded="${open}">
+        <button class="day-h" data-act="sheet-day" data-id="${d.id}" aria-haspopup="dialog">
           <span class="date"><b>${L.dd}</b><span>${L.wk}</span></span>
           <span class="day-sum">${ds.length ? byCat(ds).map(([b, l]) => b === "Jantar" ? `<strong>${l.map(r => esc(r.name)).join(", ")}</strong>` : `<span class="extra"><small class="cat">${esc(b)}</small>${l.map(r => esc(r.name)).join(", ")}</span>`).join("") : `<strong class="none">Sem prato definido</strong>`}
             <small>${d.people} pessoas${d.breakfast ? "" : ", sem café da manhã"}</small>${d.veg_guest ? (ds.some(r => r.block === VEG) || d.veg_option ? `<span class="tag ok">tem opção vegetariana</span>` : `<span class="tag sug">falta opção vegetariana</span>`) : ""}</span>
         </button>
-        ${open ? `<div class="day-body">
-          ${entries.map(m => `<small class="cat">${esc((get("recipes", m.recipe_id) || {}).block || "")}</small><div class="entry">
-            <select data-act="set" data-t="menu" data-id="${m.id}" data-f="recipe_id" aria-label="Prato do dia">${recipeOptions(m.recipe_id)}</select>
-            <button class="ghost" data-act="open-recipe" data-id="${m.recipe_id}">Ver receita</button>
-            <button class="x" data-act="del" data-t="menu" data-id="${m.id}" aria-label="Tirar do dia">×</button>
-          </div>`).join("") || `<p class="empty">Nenhum prato neste dia.</p>`}
-          <select class="adder" data-act="menu-add" data-day="${d.id}" aria-label="Adicionar prato ao dia"><option value="">Adicionar prato ou sobremesa…</option>${recipeOptions()}</select>
-          <div class="meta">
-            <label class="num">Pessoas ${inp("days", d.id, "people", d.people, 'type="number" min="0" inputmode="numeric"')}</label>
-            ${chk("days", d.id, "veg_guest", d.veg_guest, "Precisa de opção vegetariana")}
-          </div>
-          ${d.veg_guest ? `<label class="fld vegopt">Notas da opção vegetariana${area("days", d.id, "veg_option", d.veg_option, "O que muda no prato deste dia")}<span class="note">Para os ingredientes entrarem nas compras, crie uma receita do tipo Opção vegetariana e adicione a este dia.</span></label>` : ""}
-          <label class="fld">Observações${area("days", d.id, "notes", d.notes, "Lembretes do dia")}</label>
-        </div>` : ""}</article>`;
+      </article>`;
     }).join("")}</section>`}
     <h2>Café da manhã <small>${days.filter(d => d.breakfast).length} de ${days.length} dias</small></h2>
     <p class="hint">Marque os dias que vão ter café. Os itens do café contam uma vez, para a semana inteira.</p>
@@ -454,7 +465,8 @@
     }).join("")}
     ${dinnerIdeas.length ? `<h2>Sugestões</h2>
     <p class="hint">Jantares e opções vegetarianas sem dia marcado. Ficam fora das compras; para usar, abra a receita e marque um dia.</p>
-    <ul class="plain">${dinnerIdeas.map(r => `<li><button class="rowlink" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}</button></li>`).join("")}</ul>` : ""}`;
+    <ul class="plain">${dinnerIdeas.map(r => `<li><button class="rowlink" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}</button></li>`).join("")}</ul>` : ""}
+    ${ui.sheet ? daySheet(get("days", ui.sheet)) : ""}`;
   }
 
   function vRecipes() {
@@ -922,7 +934,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const act = el.dataset.act;
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "back") { ui.back = null; go("menu"); }
-    else if (act === "open-recipe") { ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
+    else if (act === "open-recipe") { ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
     else if (act === "del") { if (!el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
     else if (act === "bulk-owner") {
       const b = bulk.get(el.dataset.key), who2 = el.closest(".bulk").querySelector("select").value; if (!b) return;
@@ -953,7 +965,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     else if (act === "weekly") { const r = get("recipes", el.dataset.id), on = el.dataset.v === "1"; if (r) { toast(on ? `${r.name} entrou na semana toda.` : `${r.name} virou ideia e saiu das compras.`); update("recipes", r.id, { weekly: on }, true); } }
     else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
     else if (act === "ui-set") { ui[el.dataset.f] = el.dataset.v; if (el.dataset.f === "menuView") localStorage.setItem("an-menu-view", el.dataset.v); render(true); }
-    else if (act === "goto-day") { ui.tab = "menu"; localStorage.setItem("an-tab", "menu"); ui.open.add("d-" + el.dataset.id); ui.menuView = "list"; localStorage.setItem("an-menu-view", "list"); render(true); const n = document.getElementById("d-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
+    else if (act === "goto-day" || act === "sheet-day") { ui.tab = "menu"; localStorage.setItem("an-tab", "menu"); ui.sheet = el.dataset.id; render(true); }
+    else if (act === "sheet-close") { ui.sheet = null; render(true); }
     else if (act === "clear-mine") { ui.mSector = ui.mStatus = ""; render(true); }
     else if (act === "clear-rec") { ui.rBlock = ui.rIn = ui.rRev = ""; render(true); }
     else if (act === "clear-take") { ui.tWho = ui.tStatus = ""; render(true); }
@@ -1008,7 +1021,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   function go(t) {
     if (t === "plano") t = localStorage.getItem("an-plano") || "menu";
     if (!TABS.includes(t)) t = "start";
-    ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null;
+    ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null; ui.sheet = null;
     if (SEC[t] === "plano") localStorage.setItem("an-plano", t);
     [...ui.open].filter(k => k.startsWith("own-")).forEach(k => ui.open.delete(k)); render(true); window.scrollTo(0, 0);
   }
