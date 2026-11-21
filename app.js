@@ -157,10 +157,10 @@
           <select class="adder" data-act="menu-add" data-day="${d.id}" aria-label="Adicionar prato ao dia"><option value="">Adicionar prato ou sobremesa…</option>${recipeOptions()}</select>
           <div class="meta">
             <label class="num">Pessoas ${inp("days", d.id, "people", d.people, 'type="number" min="0" inputmode="numeric"')}</label>
-            ${chk("days", d.id, "veg_guest", d.veg_guest, "Vegetariana presente")}
+            ${chk("days", d.id, "veg_guest", d.veg_guest, "Precisa de opção vegetariana")}
             ${chk("days", d.id, "breakfast", d.breakfast, "Café da manhã")}
           </div>
-          ${d.veg_guest ? `<label class="fld vegopt">Opção vegetariana${area("days", d.id, "veg_option", d.veg_option, "O que a vegetariana come neste dia")}</label>` : ""}
+          ${d.veg_guest ? `<label class="fld vegopt">Opção vegetariana${area("days", d.id, "veg_option", d.veg_option, "Qual é a alternativa vegetariana deste dia")}</label>` : ""}
           <label class="fld">Observações${area("days", d.id, "notes", d.notes, "Lembretes do dia")}</label>
         </div></article>`;
     }).join("")}</section>
@@ -203,11 +203,11 @@
           <span class="unit">${esc(g.unit)}</span>
           <button class="ghost" data-act="open" data-key="${it.id}" aria-expanded="${more}">${more ? "Menos" : "Mais"}</button>
           <button class="x" data-act="del" data-t="recipe_items" data-id="${it.id}" aria-label="Tirar ${esc(g.name)}">×</button>
-          <div class="tags">${it.suggested ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "nao" ? `<span class="tag nov">não é vegetariano</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariana)</span>` : ""}${it.note && !more ? `<span class="note">${esc(it.note)}</span>` : ""}</div>
+          <div class="tags">${it.suggested ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "nao" ? `<span class="tag nov">não é vegetariano</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}${it.note && !more ? `<span class="note">${esc(it.note)}</span>` : ""}</div>
           ${more ? `<div class="more">
             <label class="fld">Observação${inp("recipe_items", it.id, "note", it.note)}</label>
-            <label class="fld">Vegetariana<select data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="veg">
-              <option value="" ${!it.veg ? "selected" : ""}>Pode comer</option><option value="nao" ${it.veg === "nao" ? "selected" : ""}>Não come</option><option value="conferir" ${it.veg === "conferir" ? "selected" : ""}>Conferir rótulo</option></select></label>
+            <label class="fld">Vegetariano?<select data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="veg">
+              <option value="" ${!it.veg ? "selected" : ""}>Sim</option><option value="nao" ${it.veg === "nao" ? "selected" : ""}>Não</option><option value="conferir" ${it.veg === "conferir" ? "selected" : ""}>Conferir rótulo</option></select></label>
           </div>` : ""}
         </li>`;
       }).join("") || `<li class="empty">Sem ingredientes ainda.</li>`}</ul>
