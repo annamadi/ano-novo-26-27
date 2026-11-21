@@ -80,6 +80,14 @@ create table if not exists an_trash (
   deleted_at timestamptz not null default now()
 );
 
+create table if not exists an_comments (
+  id uuid primary key,
+  pend_id uuid not null references an_pendencias(id) on delete cascade,
+  author text not null default '',
+  body text not null default '',
+  created_at timestamptz not null default now()
+);
+
 create table if not exists an_people (
   id uuid primary key,
   name text not null default '',
@@ -111,7 +119,7 @@ create table if not exists an_extras (
 do $$
 declare t text;
 begin
-  foreach t in array array['an_ingredients','an_recipes','an_recipe_items','an_days','an_menu','an_pendencias','an_extras','an_people','an_activities','an_trash']
+  foreach t in array array['an_ingredients','an_recipes','an_recipe_items','an_days','an_menu','an_pendencias','an_extras','an_people','an_activities','an_trash','an_comments']
   loop
     execute format('alter table %I enable row level security', t);
     execute format('revoke all on %I from anon', t);
