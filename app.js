@@ -3,7 +3,9 @@
 (() => {
   const CFG = window.APP_CONFIG || {};
   let who = "";
-  const TABLES = ["ingredients", "recipes", "recipe_items", "days", "menu", "pendencias", "extras"];
+  const TABLES = ["ingredients", "recipes", "recipe_items", "days", "menu", "pendencias", "extras", "people", "activities"];
+  const OPTIONAL = new Set(["people", "activities"]);
+  const TABS = ["menu", "recipes", "shop", "take", "fun", "pend", "mine"];
   const PREFIX = "an_";
   const LS_KEY = "ano-novo-2627";
   const BLOCKS = ["Jantar", "Café da manhã", "Snacks", "Sobremesa", "Bebidas", "Casa"];
@@ -11,8 +13,9 @@
     "Fresco / repor lá", "A confirmar", "Alguém leva pronto", "Compra à parte"];
 
   const S = Object.fromEntries(TABLES.map(t => [t, []]));
-  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", hideDone: false, q: "" };
-  let client = null, renderPending = false;
+  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", hideDone: false, q: "", me: "" };
+  if (!TABS.includes(ui.tab)) ui.tab = "menu";
+  let client = null, renderPending = false, needsSetup = false;
 
   const $ = s => document.querySelector(s);
   const view = $("#view");
@@ -51,15 +54,19 @@
     removeLocal(table, id);
     if (table === "recipes") { S.recipe_items = S.recipe_items.filter(r => r.recipe_id !== id); S.menu = S.menu.filter(r => r.recipe_id !== id); }
     if (table === "ingredients") S.recipe_items = S.recipe_items.filter(r => r.ingredient_id !== id);
+    if (table === "activities") S.extras = S.extras.filter(r => r.activity_id !== id);
     persistDelete(table, id); render(true);
   }
 
   async function loadAll() {
     if (client) {
       const res = await Promise.all(TABLES.map(t => client.from(PREFIX + t).select("*")));
-      const bad = res.find(r => r.error);
-      if (bad) throw bad.error;
-      TABLES.forEach((t, i) => { S[t] = res[i].data; });
+      res.forEach((r, i) => {
+        const t = TABLES[i];
+        if (!r.error) S[t] = r.data;
+        else if (OPTIONAL.has(t)) { needsSetup = true; S[t] = []; }
+        else throw r.error;
+      });
       client.channel("an-all").on("postgres_changes", { event: "*", schema: "public" }, p => {
         const t = p.table.startsWith(PREFIX) ? p.table.slice(PREFIX.length) : null;
         if (!t || !S[t]) return;
@@ -72,6 +79,9 @@
       try { data = JSON.parse(localStorage.getItem(LS_KEY)); } catch { /* recomeça do zero */ }
       if (!data) { try { const r = await fetch("private/seed.json"); if (r.ok) data = await r.json(); } catch { /* sem dados iniciais */ } }
       if (data) TABLES.forEach(t => { S[t] = data[t] || []; });
+      // dados antigos: cada gincana era uma linha solta; agora é uma atividade com itens
+      S.extras.filter(e => e.grp === "Gincanas").forEach(e => S.activities.push({ id: e.id, name: e.item, notes: "", pos: e.pos }));
+      S.extras = S.extras.filter(e => e.grp !== "Gincanas");
       saveLocal();
     }
   }
@@ -117,7 +127,8 @@
     renderPending = false;
     document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY;
-    view.innerHTML = ({ menu: vMenu, recipes: vRecipes, shop: vShop, pend: vPend, extras: vExtras }[ui.tab])() + datalists();
+    view.innerHTML = (needsSetup ? `<p class="warn">As abas Levar, Entretenimento e Minha lista só salvam depois que o banco for atualizado (arquivo supabase/migration-02.sql).</p>` : "") +
+      ({ menu: vMenu, recipes: vRecipes, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
     window.scrollTo(0, y);
     const tot = shopping(); let done = 0;
     tot.forEach((_, id) => { const i = get("ingredients", id); if (i && (i.bought || i.from_home)) done++; });
@@ -126,12 +137,36 @@
     if (ui.tab === "shop" && ui.q) filterShop();
   }
   const datalists = () => `<datalist id="dl-ings">${S.ingredients.map(i => `<option value="${esc(i.name)}">`).join("")}</datalist>
-    <datalist id="dl-owners">${[...new Set([...S.ingredients.map(i => i.owner), ...S.extras.map(i => i.owner)].filter(Boolean))].map(o => `<option value="${esc(o)}">`).join("")}</datalist>
     <datalist id="dl-sectors">${[...new Set(S.ingredients.map(i => i.sector).filter(Boolean))].sort().map(o => `<option value="${esc(o)}">`).join("")}</datalist>`;
 
   const inp = (t, id, f, val, extra = "") => `<input data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" value="${esc(val)}" ${extra}>`;
   const chk = (t, id, f, val, label) => `<label class="chk"><input type="checkbox" data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" ${val ? "checked" : ""}><span>${label}</span></label>`;
   const area = (t, id, f, val, ph) => `<textarea data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" rows="2" placeholder="${esc(ph)}">${esc(val)}</textarea>`;
+  /* responsáveis: texto "Todos" ou nomes separados por vírgula */
+  const owners = v => String(v || "").split(",").map(x => x.trim()).filter(Boolean);
+  const isMine = (v, me) => { const o = owners(v); return !!me && (o.includes("Todos") || o.some(n => norm(n) === norm(me))); };
+  const peopleNames = () => [...S.people].sort(byPos).map(p => p.name);
+  function pickBtn(id, v) {
+    return `<button type="button" class="pickbtn ${v ? "" : "none"}" data-act="open" data-key="own-${id}" aria-expanded="${ui.open.has("own-" + id)}">${esc(v || "Definir responsável")}</button>`;
+  }
+  function pickPanel(t, id, v) {
+    if (!ui.open.has("own-" + id)) return "";
+    const cur = owners(v), names = [...new Set([...peopleNames(), ...cur.filter(n => n !== "Todos")])];
+    const box = (n, on) => `<label class="chk"><input type="checkbox" data-act="owner" data-t="${t}" data-id="${id}" data-name="${esc(n)}" ${on ? "checked" : ""}><span>${esc(n)}</span></label>`;
+    return `<div class="pickpanel">${box("Todos", cur.includes("Todos"))}${names.map(n => box(n, cur.includes(n))).join("")}
+      ${names.length ? "" : `<p class="hint">Cadastre as pessoas do grupo na aba Minha lista.</p>`}
+      <button type="button" class="ghost" data-act="open" data-key="own-${id}">Pronto</button></div>`;
+  }
+  function xRow(e, showAct) {
+    const a = showAct && e.activity_id ? get("activities", e.activity_id) : null;
+    return `<li class="xrow ${e.done ? "done" : ""}">
+      <input type="checkbox" class="big" data-act="set" data-t="extras" data-id="${e.id}" data-f="done" ${e.done ? "checked" : ""} aria-label="Resolvido: ${esc(e.item)}">
+      ${inp("extras", e.id, "item", e.item, 'aria-label="Item"')}
+      <button class="x" data-act="del" data-t="extras" data-id="${e.id}" aria-label="Excluir ${esc(e.item)}">×</button>
+      <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}${a ? `<span class="tag">${esc(a.name)}</span>` : ""}</div>
+      ${pickPanel("extras", e.id, e.owner)}
+    </li>`;
+  }
   function recipeOptions(sel) {
     return BLOCKS.concat([...new Set(S.recipes.map(r => r.block))].filter(b => !BLOCKS.includes(b))).map(b => {
       const rs = S.recipes.filter(r => r.block === b).sort(byPos);
@@ -268,7 +303,7 @@
           <label class="fld">Nome (muda em todas as receitas)${inp("ingredients", i.id, "name", i.name)}</label>
           <label class="fld">Unidade${inp("ingredients", i.id, "unit", i.unit)}</label>
           <label class="fld">Como comprar (embalagem)${inp("ingredients", i.id, "buy_hint", i.buy_hint)}</label>
-          <label class="fld">Responsável${inp("ingredients", i.id, "owner", i.owner, 'list="dl-owners" placeholder="Quem compra ou leva"')}</label>
+          <div class="fld">Responsável<div class="pickwrap">${pickBtn(i.id, i.owner)}</div>${pickPanel("ingredients", i.id, i.owner)}</div>
           <label class="fld">Quando comprar<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="when_buy">${[...new Set(WHEN.concat(i.when_buy || []))].map(w => `<option ${w === i.when_buy ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>
           <label class="fld">Setor${inp("ingredients", i.id, "sector", i.sector, 'list="dl-sectors"')}</label>
         </div>
@@ -294,14 +329,57 @@
     }).join("")}`;
   }
 
-  function vExtras() {
-    const groups = [...new Set(["Levar", "Gincanas", ...S.extras.map(e => e.grp)])];
-    return groups.map(g => `<h2>${esc(g)}</h2><ul class="extras">${S.extras.filter(e => e.grp === g).sort(byPos).map(e => `<li class="${e.done ? "done" : ""}">
-      <input type="checkbox" class="big" data-act="set" data-t="extras" data-id="${e.id}" data-f="done" ${e.done ? "checked" : ""} aria-label="Feito: ${esc(e.item)}">
-      ${inp("extras", e.id, "item", e.item, 'aria-label="Item"')}
-      ${inp("extras", e.id, "owner", e.owner, 'list="dl-owners" placeholder="Quem leva ou organiza" aria-label="Responsável"')}
-      <button class="x" data-act="del" data-t="extras" data-id="${e.id}" aria-label="Excluir ${esc(e.item)}">×</button></li>`).join("")}</ul>
-      <form class="newrow" data-form="add-extra" data-grp="${esc(g)}"><input name="item" placeholder="Adicionar em ${esc(g)}" required><button class="btn">Adicionar</button></form>`).join("");
+  function vTake() {
+    const plain = S.extras.filter(e => !e.activity_id).sort(byPos);
+    const acts = [...S.activities].sort(byPos).map(a => [a, S.extras.filter(e => e.activity_id === a.id).sort(byPos)]).filter(([, l]) => l.length);
+    const cnt = l => `<small>${l.filter(e => e.done).length}/${l.length}</small>`;
+    return `<p class="lead">O que o grupo precisa levar ou comprar além da comida. Marque quando estiver separado ou comprado.</p>
+    <h2>Levar ${cnt(plain)}</h2>
+    <ul class="xlist">${plain.map(e => xRow(e)).join("") || `<li class="empty">Nada na lista ainda.</li>`}</ul>
+    <form class="newrow" data-form="add-extra"><input name="item" placeholder="Adicionar item para levar" required><button class="btn">Adicionar</button></form>
+    <h2>Entretenimento ${cnt(acts.flatMap(([, l]) => l))}</h2>
+    <p class="hint">Vem do que cada atividade precisa. Para incluir itens, abra a atividade na aba Entretenimento.</p>
+    ${acts.map(([a, l]) => `<h3>${esc(a.name)}</h3><ul class="xlist">${l.map(e => xRow(e)).join("")}</ul>`).join("") || `<p class="empty">Nenhuma atividade tem itens ainda.</p>`}`;
+  }
+
+  function vFun() {
+    return `<p class="lead">Jogos, gincanas e programas. O que cada atividade precisa aparece também na aba Levar.</p>
+    <form class="newrow" data-form="new-activity"><input name="name" placeholder="Nome da atividade nova" required><button class="btn primary">Criar atividade</button></form>
+    ${[...S.activities].sort(byPos).map(a => {
+      const open = ui.open.has(a.id), items = S.extras.filter(e => e.activity_id === a.id).sort(byPos);
+      const meta = items.length ? `${items.filter(e => e.done).length} de ${items.length} ${items.length === 1 ? "item resolvido" : "itens resolvidos"}` : "sem itens";
+      return `<article class="recipe ${open ? "open" : ""}">
+        <button class="rhead" data-act="open" data-key="${a.id}" aria-expanded="${open}"><span class="rname">${esc(a.name)}</span><span class="rmeta">${meta}</span></button>
+        ${open ? `<div class="rbody">
+          <label class="fld">Nome${inp("activities", a.id, "name", a.name)}</label>
+          <label class="fld">Como funciona${area("activities", a.id, "notes", a.notes, "Regras, quem organiza, quando")}</label>
+          <h3>O que precisa</h3>
+          <ul class="xlist">${items.map(e => xRow(e)).join("") || `<li class="empty">Nada ainda.</li>`}</ul>
+          <form class="newrow" data-form="add-extra" data-activity="${a.id}"><input name="item" placeholder="Item para comprar ou levar" required><button class="btn">Adicionar</button></form>
+          <button class="btn danger" data-act="del" data-t="activities" data-id="${a.id}" data-confirm="Excluir a atividade ${esc(a.name)} e os itens dela?">Excluir atividade</button>
+        </div>` : ""}</article>`;
+    }).join("") || `<p class="empty">Nenhuma atividade ainda. Crie a primeira acima.</p>`}`;
+  }
+
+  function vMine() {
+    const names = peopleNames();
+    const me = ui.me || names.find(n => norm(n) === norm(who)) || who || names[0] || "";
+    const opts = names.some(n => norm(n) === norm(me)) || !me ? names : names.concat(me);
+    const tot = shopping();
+    const food = S.ingredients.filter(i => tot.has(i.id) && isMine(i.owner, me)).sort((a, b) => a.name.localeCompare(b.name, "pt"));
+    const things = S.extras.filter(e => isMine(e.owner, me)).sort(byPos);
+    const people = `<h2>Pessoas do grupo</h2>
+      <p class="hint">São os nomes que aparecem nas opções de responsável.</p>
+      <ul class="plain">${[...S.people].sort(byPos).map(p => `<li><span>${esc(p.name)}</span><button class="x" data-act="del" data-t="people" data-id="${p.id}" data-confirm="Tirar ${esc(p.name)} das opções de responsável?" aria-label="Tirar ${esc(p.name)}">×</button></li>`).join("")}</ul>
+      <form class="newrow" data-form="add-person"><input name="name" placeholder="Nome da pessoa" required><button class="btn">Adicionar pessoa</button></form>`;
+    if (!me) return `<p class="lead">Cadastre as pessoas do grupo para ver a lista de cada uma.</p>${people}`;
+    return `<div class="shopbar"><label class="fld inline">Lista de <select data-act="ui" data-f="me">${opts.map(n => `<option ${norm(n) === norm(me) ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label></div>
+    <p class="hint">Tudo em que ${esc(me)} aparece como responsável, incluindo o que está marcado para todos.</p>
+    <h2>Comida e compras <small>${food.filter(i => i.bought || i.from_home).length}/${food.length}</small></h2>
+    ${food.length ? `<ul class="shop">${food.map(i => vItem(i, tot.get(i.id))).join("")}</ul>` : `<p class="empty">Nenhum item de compra. Defina os responsáveis na aba Compras.</p>`}
+    <h2>Coisas para levar <small>${things.filter(e => e.done).length}/${things.length}</small></h2>
+    ${things.length ? `<ul class="xlist">${things.map(e => xRow(e, true)).join("")}</ul>` : `<p class="empty">Nenhum item para levar. Defina os responsáveis nas abas Levar e Entretenimento.</p>`}
+    ${people}`;
   }
 
   function filterShop() {
@@ -332,8 +410,19 @@
         if (!v || (dup && dup.id !== id)) { toast(v ? `Já existe um ingrediente chamado ${dup.name}.` : "O nome não pode ficar vazio."); return render(true); }
         patch.name = v;
       }
-      if ((t === "recipes" || t === "extras") && (f === "name" || f === "item") && !String(v).trim()) return render(true);
+      if (["recipes", "extras", "activities"].includes(t) && (f === "name" || f === "item") && !String(v).trim()) return render(true);
       update(t, id, patch, force);
+    } else if (act === "owner") {
+      const { t, id, name } = el.dataset, row = get(t, id); if (!row) return;
+      let v;
+      if (name === "Todos") v = el.checked ? "Todos" : "";
+      else {
+        const cur = owners(row.owner).filter(n => n !== "Todos" && n !== name);
+        if (el.checked) cur.push(name);
+        const order = peopleNames();
+        v = cur.sort((a, b) => ((order.indexOf(a) + 999) % 999) - ((order.indexOf(b) + 999) % 999)).join(", ");
+      }
+      update(t, id, { owner: v }, true);
     } else if (act === "repoint") {
       const it = get("recipe_items", el.dataset.id), name = el.value.trim();
       if (!it || !name) return render(true);
@@ -366,7 +455,7 @@
   });
   view.addEventListener("submit", e => {
     e.preventDefault();
-    const f = e.target, kind = f.dataset.form, v = n => f.elements[n].value.trim();
+    const f = e.target, kind = f.dataset.form, v = n => f.querySelector(`[name="${n}"]`).value.trim();
     if (kind === "add-item") {
       const ing = ensureIngredient(v("name"), v("unit"));
       add("recipe_items", { id: uid(), recipe_id: f.dataset.id, ingredient_id: ing.id, qty: num(v("qty")), suggested: false, veg: "", note: "", pos: nextPos("recipe_items") });
@@ -378,17 +467,28 @@
     } else if (kind === "add-pend") {
       add("pendencias", { id: uid(), kind: "Dúvida", subject: v("subject"), detail: v("detail"), answer: "", done: false, pos: nextPos("pendencias") });
     } else if (kind === "add-extra") {
-      add("extras", { id: uid(), grp: f.dataset.grp, item: v("item"), owner: "", done: false, pos: nextPos("extras") });
+      add("extras", { id: uid(), grp: "Levar", item: v("item"), owner: "", done: false, buy: false, activity_id: f.dataset.activity || null, pos: nextPos("extras") });
+    } else if (kind === "new-activity") {
+      const a = { id: uid(), name: v("name"), notes: "", pos: nextPos("activities") };
+      ui.open.add(a.id); add("activities", a);
+    } else if (kind === "add-person") {
+      const name = v("name");
+      if (S.people.some(p => norm(p.name) === norm(name))) return toast(`${name} já está na lista.`);
+      add("people", { id: uid(), name, pos: nextPos("people") });
     }
   });
   $("#tabs").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
-    ui.tab = b.dataset.tab; localStorage.setItem("an-tab", ui.tab); render(true); window.scrollTo(0, 0);
+    ui.tab = b.dataset.tab; localStorage.setItem("an-tab", ui.tab);
+    [...ui.open].filter(k => k.startsWith("own-")).forEach(k => ui.open.delete(k)); render(true); window.scrollTo(0, 0);
   });
 
   /* ---------- início ---------- */
   async function start() {
     try { await loadAll(); } catch (err) { console.error(err); $("#app").hidden = false; view.innerHTML = `<p class="empty">Não foi possível carregar os dados. Recarregue a página; se continuar, confira se o projeto do Supabase está ativo.</p>`; return; }
+    if (client && who && !needsSetup && !S.people.some(p => norm(p.name) === norm(who))) {
+      const me = { id: uid(), name: who, pos: nextPos("people") }; S.people.push(me); persist("people", me);
+    }
     $("#login").hidden = true; $("#app").hidden = false; render(true);
   }
   async function boot() {
