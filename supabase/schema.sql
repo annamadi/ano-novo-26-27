@@ -13,7 +13,9 @@ create table if not exists an_ingredients (
   owner text not null default '',
   note text not null default '',
   store text not null default '',
-  paid numeric not null default 0
+  paid numeric not null default 0,
+  bought_by text not null default '',
+  hint_qty numeric
 );
 
 create table if not exists an_recipes (
@@ -64,7 +66,17 @@ create table if not exists an_pendencias (
   detail text not null default '',
   answer text not null default '',
   done boolean not null default false,
+  recipe_id uuid references an_recipes(id) on delete cascade,
   pos double precision not null default 0
+);
+
+create table if not exists an_trash (
+  id uuid primary key,
+  tbl text not null default '',
+  label text not null default '',
+  payload jsonb not null default '{}'::jsonb,
+  deleted_by text not null default '',
+  deleted_at timestamptz not null default now()
 );
 
 create table if not exists an_people (
@@ -89,6 +101,7 @@ create table if not exists an_extras (
   buy boolean not null default false,
   paid numeric not null default 0,
   store text not null default '',
+  bought_by text not null default '',
   activity_id uuid references an_activities(id) on delete cascade,
   pos double precision not null default 0
 );
@@ -97,7 +110,7 @@ create table if not exists an_extras (
 do $$
 declare t text;
 begin
-  foreach t in array array['an_ingredients','an_recipes','an_recipe_items','an_days','an_menu','an_pendencias','an_extras','an_people','an_activities']
+  foreach t in array array['an_ingredients','an_recipes','an_recipe_items','an_days','an_menu','an_pendencias','an_extras','an_people','an_activities','an_trash']
   loop
     execute format('alter table %I enable row level security', t);
     execute format('revoke all on %I from anon', t);

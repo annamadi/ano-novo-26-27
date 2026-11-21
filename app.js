@@ -3,11 +3,11 @@
 (() => {
   const CFG = window.APP_CONFIG || {};
   let who = "";
-  const TABLES = ["ingredients", "recipes", "recipe_items", "days", "menu", "pendencias", "extras", "people", "activities"];
-  const OPTIONAL = new Set(["people", "activities"]);
-  const TABS = ["menu", "recipes", "home", "fun", "shop", "take", "mine", "pend"];
-  const SEC = { menu: "plano", recipes: "plano", home: "plano", fun: "plano", shop: "compras", take: "levar", mine: "minha", pend: "pend" };
-  const TITLE = { menu: "Cardápio", recipes: "Receitas", home: "Casa", fun: "Entretenimento", shop: "Compras", take: "Levar", mine: "Minha lista", pend: "Pendências" };
+  const TABLES = ["ingredients", "recipes", "recipe_items", "days", "menu", "pendencias", "extras", "people", "activities", "trash"];
+  const OPTIONAL = new Set(["people", "activities", "trash"]);
+  const TABS = ["start", "menu", "recipes", "home", "fun", "shop", "take", "mine", "pend"];
+  const SEC = { start: "inicio", menu: "plano", recipes: "plano", home: "plano", fun: "plano", shop: "compras", take: "levar", mine: "minha", pend: "pend" };
+  const TITLE = { start: "Início", menu: "Cardápio", recipes: "Receitas", home: "Casa", fun: "Entretenimento", shop: "Compras", take: "Levar", mine: "Minha lista", pend: "Pendências" };
   const PREFIX = "an_";
   const LS_KEY = "ano-novo-2627";
   const BLOCKS = ["Jantar", "Café da manhã", "Snacks", "Sobremesa", "Bebidas", "Casa"];
@@ -19,9 +19,10 @@
   const HOME = "Alguém leva pronto";
   const isHome = i => !!i.from_home || i.when_buy === HOME;
   const S = Object.fromEntries(TABLES.map(t => [t, []]));
-  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", fSector: "", fStore: "", fWhen: "", fType: "", showF: false, tWho: "", tStatus: "", mStatus: "", mSector: "", q: "", me: "", menuView: localStorage.getItem("an-menu-view") || "list" };
+  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", fSector: "", fStore: "", fWhen: "", fType: "", showF: false, tWho: "", tStatus: "", mStatus: "", mSector: "", q: "", me: "", menuView: localStorage.getItem("an-menu-view") || "list", v: new URLSearchParams(location.search).get("v") || localStorage.getItem("an-v") || "a" };
+  localStorage.setItem("an-v", ui.v);
   if (!TABS.includes(ui.tab)) ui.tab = "menu";
-  let client = null, renderPending = false, needsSetup = false, revMap = new Map();
+  let client = null, renderPending = false, needsSetup = false, noTrash = false, revMap = new Map();
 
   const $ = s => document.querySelector(s);
   const view = $("#view");
@@ -33,10 +34,14 @@
   const byPos = (a, b) => (a.pos ?? 0) - (b.pos ?? 0);
   const nextPos = t => S[t].reduce((m, r) => Math.max(m, r.pos ?? 0), 0) + 1;
 
-  function toast(msg) {
-    const el = $("#toast"); el.textContent = msg; el.classList.add("on");
-    clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 3800);
+  function toast(msg, undoId) {
+    const el = $("#toast"); el.textContent = msg;
+    if (undoId) el.insertAdjacentHTML("beforeend", ` <button class="link" data-act="restore" data-id="${undoId}">Desfazer</button>`);
+    el.classList.add("on");
+    clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), undoId ? 8000 : 3800);
   }
+  // a coluna existe no banco? (permite publicar o site antes de atualizar o banco)
+  const hasCol = (t, c) => !client || !S[t][0] || c in S[t][0];
 
   /* ---------- persistência ---------- */
   function saveLocal() { if (!client) localStorage.setItem(LS_KEY, JSON.stringify(S)); }
@@ -56,12 +61,35 @@
   }
   function add(table, row, force = true) { S[table].push(row); persist(table, row); render(force); return row; }
   function removeLocal(table, id) { const i = S[table].findIndex(r => r.id === id); if (i >= 0) S[table].splice(i, 1); }
+  const KIND = { recipes: "Receita", ingredients: "Ingrediente", activities: "Atividade", extras: "Item", pendencias: "Pendência", recipe_items: "Ingrediente de receita" };
   function remove(table, id) {
-    removeLocal(table, id);
-    if (table === "recipes") { S.recipe_items = S.recipe_items.filter(r => r.recipe_id !== id); S.menu = S.menu.filter(r => r.recipe_id !== id); }
-    if (table === "ingredients") S.recipe_items = S.recipe_items.filter(r => r.ingredient_id !== id);
-    if (table === "activities") S.extras = S.extras.filter(r => r.activity_id !== id);
+    const row = get(table, id); if (!row) return;
+    const pay = { [table]: [row] };
+    if (table === "recipes") { pay.recipe_items = S.recipe_items.filter(r => r.recipe_id === id); pay.menu = S.menu.filter(r => r.recipe_id === id); pay.pendencias = S.pendencias.filter(r => r.recipe_id === id); }
+    if (table === "ingredients") pay.recipe_items = S.recipe_items.filter(r => r.ingredient_id === id);
+    if (table === "activities") pay.extras = S.extras.filter(r => r.activity_id === id);
+    let label = row.name || row.item || row.subject || "";
+    if (table === "recipe_items") label = `${(get("ingredients", row.ingredient_id) || {}).name || "Item"} em ${(get("recipes", row.recipe_id) || {}).name || "receita"}`;
+    const keep = KIND[table] && !noTrash;
+    let tid = null;
+    if (keep) { const t = { id: uid(), tbl: table, label, payload: pay, deleted_by: who, deleted_at: new Date().toISOString() }; S.trash.push(t); persist("trash", t); tid = t.id; }
+    for (const [t, rows] of Object.entries(pay)) rows.forEach(r => removeLocal(t, r.id));
     persistDelete(table, id); render(true);
+    if (keep) toast(`${label} foi para a lixeira.`, tid);
+  }
+  async function restore(id) {
+    const t = get("trash", id); if (!t) return;
+    const ok = { recipe_items: r => get("recipes", r.recipe_id) && get("ingredients", r.ingredient_id), menu: r => get("recipes", r.recipe_id) && get("days", r.day_id) };
+    let skipped = 0;
+    for (const tb of ["ingredients", "recipes", "activities", "recipe_items", "menu", "extras", "pendencias"]) for (const r of (t.payload[tb] || [])) {
+      if (ok[tb] && !ok[tb](r)) { skipped++; continue; }
+      if (tb === "extras" && r.activity_id && !get("activities", r.activity_id)) r.activity_id = null;
+      if (tb === "pendencias" && r.recipe_id && !get("recipes", r.recipe_id)) r.recipe_id = null;
+      if (!get(tb, r.id)) S[tb].push(r);
+      await persist(tb, r);
+    }
+    removeLocal("trash", id); persistDelete("trash", id); render(true);
+    toast(skipped ? `${t.label} voltou, menos ${skipped} ligações com coisas que não existem mais.` : `${t.label} voltou.`);
   }
 
   async function loadAll() {
@@ -70,10 +98,10 @@
       res.forEach((r, i) => {
         const t = TABLES[i];
         if (!r.error) S[t] = r.data;
-        else if (OPTIONAL.has(t)) { needsSetup = true; S[t] = []; }
+        else if (OPTIONAL.has(t)) { needsSetup = true; S[t] = []; if (t === "trash") noTrash = true; }
         else throw r.error;
       });
-      if ((S.recipes[0] && !("reviewed" in S.recipes[0])) || (S.ingredients[0] && !("paid" in S.ingredients[0])) || (S.extras[0] && !("store" in S.extras[0]))) needsSetup = true;
+      if ((S.recipes[0] && !("reviewed" in S.recipes[0])) || (S.ingredients[0] && !("paid" in S.ingredients[0])) || (S.extras[0] && !("store" in S.extras[0])) || (S.ingredients[0] && !("bought_by" in S.ingredients[0]))) needsSetup = true;
       client.channel("an-all").on("postgres_changes", { event: "*", schema: "public" }, p => {
         const t = p.table.startsWith(PREFIX) ? p.table.slice(PREFIX.length) : null;
         if (!t || !S[t]) return;
@@ -146,14 +174,16 @@
     $("#app").dataset.sec = sec;
     document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.sec === sec ? "page" : "false"));
     $("#sub").hidden = sec !== "plano";
+    $("#top").hidden = ui.tab === "start";
+    const sb = $('#tabs [data-tab="start"]'), pb = $('#tabs [data-tab="pend"]'); sb.hidden = ui.v !== "b"; pb.hidden = ui.v === "b";
     document.querySelectorAll("#sub button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY;
     revMap = unreviewed();
-    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-03.sql).</p>` : "") +
-      ({ menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
+    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-04.sql).</p>` : "") +
+      ({ start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
     window.scrollTo(0, y);
     view.querySelectorAll("input[placeholder]:not([aria-label])").forEach(i => { if (!i.closest("label")) i.setAttribute("aria-label", i.placeholder); });
-    $("#top").innerHTML = header();
+    $("#top").innerHTML = ui.tab === "start" ? "" : header();
     if (ui.tab === "shop" && ui.q) filterShop();
   }
   const meName = () => { const names = peopleNames(); return ui.me || names.find(n => norm(n) === norm(who)) || who || names[0] || ""; };
@@ -218,6 +248,7 @@
       <button class="x" data-act="del" data-t="extras" data-id="${e.id}" aria-label="Excluir ${esc(e.item)}">×</button>
       <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}
         ${e.buy ? `<label class="paid">R$ <input data-act="set" data-t="extras" data-id="${e.id}" data-f="paid" data-num="1" value="${esc(numIn(e.paid))}" inputmode="decimal" placeholder="pago" aria-label="Valor pago"></label>
+        ${hasCol("extras", "bought_by") ? `<select class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="bought_by" aria-label="Quem pagou">${payOpts(e.bought_by, "Quem pagou")}</select>` : ""}
         <input class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="store" value="${esc(e.store)}" list="dl-stores" placeholder="Onde comprar" aria-label="Local de compra">` : ""}
         ${a ? `<span class="tag">${esc(a.name)}</span>` : ""}</div>
       ${pickPanel("extras", e.id, e.owner)}
@@ -271,6 +302,8 @@
   }
   const sel = (f, opts) => `<select data-act="ui" data-f="${f}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${ui[f] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
   const whoOpts = () => [["", "Todas"], ...peopleNames().map(n => [n, n]), ["-", "Sem responsável"]];
+  const payOpts = (cur, none = "Ninguém ainda") => [["", none], ...[...new Set(peopleNames().concat(cur || []))].map(n => [n, n])].map(([v, l]) => `<option value="${esc(v)}" ${v === (cur || "") ? "selected" : ""}>${esc(l)}</option>`).join("");
+  const paidBy = entries => { const m = new Map(); entries.forEach(en => { const v = Number(en.r.paid) || 0; if (v) m.set(en.r.bought_by || "sem nome", (m.get(en.r.bought_by || "sem nome") || 0) + v); }); return [...m].map(([n, v]) => `${n} R$ ${money.format(v)}`).join("; "); };
   const paidSum = entries => entries.reduce((t, en) => t + (Number(en.r.paid) || 0), 0);
   const foodBlocks = () => FOOD.concat([...new Set(S.recipes.map(r => r.block))].filter(b => !BLOCKS.includes(b)));
   function recipeOptions(sel) {
@@ -352,6 +385,7 @@
   function vRecipe(r, flat) {
     const open = flat || ui.open.has(r.id), st = recipeStatus(r);
     const items = S.recipe_items.filter(i => i.recipe_id === r.id).sort(byPos);
+    const qs = S.pendencias.filter(p => p.recipe_id === r.id).sort((a, b) => (a.done - b.done) || byPos(a, b)), qOpen = qs.filter(p => !p.done).length;
     let body = "";
     if (open) body = `<div class="rbody">
       ${flat ? "" : `      <div class="grid2">
@@ -383,8 +417,12 @@
         <input name="unit" placeholder="un, g, lata…">
         <button class="btn">Adicionar</button>
       </form>
+      ${!hasCol("pendencias", "recipe_id") ? "" : `<h3>Dúvidas desta receita <small>${qs.filter(p => p.done).length}/${qs.length}</small></h3>
+      ${qs.length ? `<ul class="pend">${qs.map(p => pendRow(p, true)).join("")}</ul>` : ""}
+      <form class="newrow" data-form="add-pend" data-recipe="${r.id}"><input name="subject" placeholder="Nova dúvida sobre esta receita" required><button class="btn">Adicionar dúvida</button></form>`}
       <div class="review ${r.reviewed ? "ok" : ""}">${r.reviewed
         ? `<span>Revisada${r.reviewed_by ? " por " + esc(r.reviewed_by) : ""}. Ingredientes e quantidades confirmados.</span><button class="ghost" data-act="review" data-id="${r.id}" data-v="0">Desfazer</button>`
+        : qOpen ? `<span>Resolva ${qOpen === 1 ? "a dúvida acima" : `as ${qOpen} dúvidas acima`} antes de marcar como revisada.</span>`
         : `<span>Conferiu ingredientes e quantidades? Só marque depois de ler a lista.</span><button class="btn primary" data-act="review" data-id="${r.id}" data-v="1">Marcar como revisada</button>`}</div>
       ${flat ? "" : `      <p class="hint">Trocar o nome aqui troca o ingrediente só nesta receita. Para renomear em todas, use a aba Compras.</p>
       <label class="fld">Modo de preparo e notas<textarea data-act="set" data-t="recipes" data-id="${r.id}" data-f="prep" rows="${Math.min(12, Math.max(3, (r.prep || "").split("\n").length + 1))}" placeholder="Passos, dicas, quem faz">${esc(r.prep)}</textarea></label>
@@ -395,7 +433,7 @@
       <button class="rhead chev" data-act="open" data-key="${r.id}" aria-expanded="${open}"><span>
         <span class="rname">${esc(r.name)}</span>
         <span class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)}, ${items.length} ${items.length === 1 ? "item" : "itens"}</span></span>
-        ${st.idea ? "" : r.reviewed ? `<span class="tag ok">revisada</span>` : `<span class="tag sug">a revisar</span>`}
+        ${qOpen ? `<span class="tag nov">${qOpen} ${qOpen === 1 ? "dúvida" : "dúvidas"}</span>` : ""}${st.idea ? "" : r.reviewed ? `<span class="tag ok">revisada</span>` : `<span class="tag sug">a revisar</span>`}
       </button>${body}</article>`;
   }
 
@@ -421,7 +459,7 @@
       <label class="fld">Comida ou item ${pick("fType", "Os dois")}</label>
       <label class="fld">Revisão ${sel("fRev", [["", "Tudo"], ["ok", "Receitas revisadas"], ["todo", "Receita a revisar"]])}</label>` : ""}
     </div>
-    ${paid || active || ui.fStatus ? `<p class="hint">${paid ? `R$ ${money.format(paid)} pagos até agora. ` : ""}${active || ui.fStatus ? `Mostrando ${shown.length} de ${all.length} itens. <button class="ghost" data-act="clear-filters">Limpar filtros</button>` : ""}</p>` : `<p class="hint">Toque num grupo para abrir a lista.</p>`}
+    ${paid || active || ui.fStatus ? `<p class="hint">${paid ? `R$ ${money.format(paid)} pagos até agora (${esc(paidBy(all))}). ` : ""}${active || ui.fStatus ? `Mostrando ${shown.length} de ${all.length} itens. <button class="ghost" data-act="clear-filters">Limpar filtros</button>` : ""}</p>` : `<p class="hint">Toque num grupo para abrir a lista.</p>`}
     ${groupList(shown, ui.group, tot, "h2", active || ui.fStatus ? "shopf" : "shop", !!(active || ui.fStatus)) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
     <form class="newrow" data-form="add-extra" data-buy="1"><input name="item" placeholder="Adicionar compra que não é comida" required><button class="btn">Adicionar</button></form>
     <p class="hint">O que vem de casa fica na aba Levar. Itens de Levar e Entretenimento marcados com "Precisa comprar" aparecem aqui.</p>
@@ -431,22 +469,24 @@
   }
   function vItem(i, e, g) {
     const open = ui.open.has(i.id), done = i.bought, pend = revMap.get(i.id);
+    const stale = !!i.buy_hint && i.hint_qty != null && Math.abs(Number(i.hint_qty) - e.qty) > 1e-6;
     return `<li class="item ${done ? "done" : ""}" data-name="${esc(norm(i.name))}">
       ${tick("ingredients", i.id, "bought", i.bought, (isHome(i) ? "Separado: " : "Comprado: ") + i.name)}
       <button class="imain" data-act="open" data-key="${i.id}" aria-expanded="${open}">
         <span class="iname2">${esc(i.name)}</span><span class="iqty2">${esc(fmtQty(e.qty, i.unit))}</span>
-        <span class="isub">${esc(i.buy_hint)}</span>
-        <span class="chips">${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${g !== "sector" && i.sector ? `<span class="tag">${esc(i.sector)}</span>` : ""}${g !== "when_buy" && i.when_buy && !isHome(i) ? `<span class="tag when">${esc(i.when_buy)}</span>` : ""}${g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}</span>
+        <span class="isub">${stale ? "" : esc(i.buy_hint)}</span>
+        <span class="chips">${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${g !== "sector" && i.sector ? `<span class="tag">${esc(i.sector)}</span>` : ""}${g !== "when_buy" && i.when_buy && !isHome(i) ? `<span class="tag when">${esc(i.when_buy)}</span>` : ""}${g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}${i.bought && i.bought_by ? `<span class="tag ok">pago por ${esc(i.bought_by)}</span>` : ""}</span>
       </button>
       ${open ? `<div class="ibody">
         <div class="grid2">
           <label class="fld">Nome (muda em todas as receitas)${inp("ingredients", i.id, "name", i.name)}</label>
           <label class="fld">Unidade${inp("ingredients", i.id, "unit", i.unit)}</label>
-          <label class="fld">Como comprar (embalagem)${inp("ingredients", i.id, "buy_hint", i.buy_hint)}</label>
+          <label class="fld">Como comprar (embalagem)${inp("ingredients", i.id, "buy_hint", i.buy_hint)}${stale ? `<span class="stale">Escrito quando o total era ${esc(fmtQty(Number(i.hint_qty), i.unit))}. Atualize ou apague.</span>` : ""}</label>
           <div class="fld">Responsável<div class="pickwrap">${pickBtn(i.id, i.owner)}</div>${pickPanel("ingredients", i.id, i.owner)}</div>
           ${isHome(i) ? "" : `          <label class="fld">Quando comprar<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="when_buy">${[...new Set(WHEN.concat(i.when_buy || []))].map(w => `<option ${w === i.when_buy ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>`}
           <label class="fld">Categoria${inp("ingredients", i.id, "sector", i.sector, 'list="dl-sectors"')}</label>
           <label class="fld">Valor pago (R$)<input data-act="set" data-t="ingredients" data-id="${i.id}" data-f="paid" data-num="1" value="${esc(numIn(i.paid))}" inputmode="decimal" placeholder="0,00"></label>
+          ${isHome(i) || !hasCol("ingredients", "bought_by") ? "" : `<label class="fld">Quem pagou<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought_by">${payOpts(i.bought_by)}</select></label>`}
           <label class="fld">Local de compra${inp("ingredients", i.id, "store", i.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
         </div>
         ${chk("ingredients", i.id, "from_home", isHome(i), "Vem de casa (alguém leva, não precisa comprar; vai para a aba Levar)")}
@@ -457,19 +497,30 @@
     </li>`;
   }
 
+  function pendRow(p, inRecipe) {
+    const key = norm(String(p.subject).split(":")[0]);
+    const sug = S.recipes.filter(r => key && (norm(r.name).includes(key) || key.includes(norm(r.name))));
+    const others = S.recipes.filter(r => !sug.includes(r)).sort((a, b) => a.name.localeCompare(b.name, "pt"));
+    const o = r => `<option value="${r.id}">${esc(r.name)}</option>`;
+    return `<li class="${p.done ? "done" : ""}">
+      ${tick("pendencias", p.id, "done", p.done, "Resolvido: " + p.subject)}
+      <div><strong>${esc(p.subject)}</strong>${p.detail ? `<p>${esc(p.detail)}</p>` : ""}
+        ${area("pendencias", p.id, "answer", p.answer, p.kind === "Dúvida" ? "Resposta" : "Comentário")}
+        ${!hasCol("pendencias", "recipe_id") ? "" : inRecipe ? `<button class="ghost" data-act="pend-out" data-id="${p.id}">Tirar da receita</button>`
+          : `<select class="mover" data-act="pend-move" data-id="${p.id}" aria-label="Mover ${esc(p.subject)} para uma receita"><option value="">Mover para uma receita…</option>${sug.length ? `<optgroup label="Sugestões">${sug.map(o).join("")}</optgroup>` : ""}<optgroup label="Todas">${others.map(o).join("")}</optgroup></select>`}
+        <button class="ghost" data-act="del" data-t="pendencias" data-id="${p.id}">Excluir</button></div></li>`;
+  }
   function vPend() {
-    const kinds = [...new Set(S.pendencias.map(p => p.kind))];
+    const free = S.pendencias.filter(p => !p.recipe_id), linked = S.pendencias.length - free.length;
+    const kinds = [...new Set(free.map(p => p.kind))];
     return `<form class="newrow" data-form="add-pend">
       <input name="subject" placeholder="Assunto" required><input name="detail" placeholder="Qual é a dúvida ou o lembrete?">
       <button class="btn primary">Adicionar pendência</button></form>
+    <p class="hint">${linked ? `${linked} ${linked === 1 ? "pendência está" : "pendências estão"} dentro das receitas. ` : ""}Se a dúvida é sobre uma receita, mova para ela: passa a aparecer só lá.</p>
     ${kinds.map(k => {
-      const list = S.pendencias.filter(p => p.kind === k).sort((a, b) => (a.done - b.done) || byPos(a, b));
-      return `<h2>${esc(k)} <small>${list.filter(p => p.done).length}/${list.length}</small></h2><ul class="pend">${list.map(p => `<li class="${p.done ? "done" : ""}">
-        ${tick("pendencias", p.id, "done", p.done, "Resolvido: " + p.subject)}
-        <div><strong>${esc(p.subject)}</strong><p>${esc(p.detail)}</p>
-          ${area("pendencias", p.id, "answer", p.answer, k === "Dúvida" ? "Resposta" : "Comentário")}
-          <button class="ghost" data-act="del" data-t="pendencias" data-id="${p.id}" data-confirm="Excluir esta pendência?">Excluir</button></div></li>`).join("")}</ul>`;
-    }).join("")}`;
+      const list = free.filter(p => p.kind === k).sort((a, b) => (a.done - b.done) || byPos(a, b));
+      return `<h2>${esc(k)} <small>${list.filter(p => p.done).length}/${list.length}</small></h2><ul class="pend">${list.map(p => pendRow(p)).join("")}</ul>`;
+    }).join("") || `<p class="empty">Nenhuma pendência geral.</p>`}`;
   }
 
   function vTake() {
@@ -545,7 +596,44 @@
     ${groupList(buy, "sector", tot, "h3", "mb") || `<p class="empty">${buyAll.length ? "Nenhuma compra com esses filtros." : "Nenhuma compra. Defina os responsáveis na aba Compras."}</p>`}
     <h2 class="sec">Levar ${cnt(takeAll)}</h2>
     ${groupList(take, "origin", tot, "h3", "mt") || `<p class="empty">${takeAll.length ? "Nenhum item com esses filtros." : "Nenhum item para levar. Defina os responsáveis na aba Levar."}</p>`}
-    ${people}`;
+    ${people}
+    ${noTrash ? "" : `<h2>Lixeira <small>${S.trash.length}</small></h2>
+    <p class="hint">O que foi excluído fica aqui por 7 dias e pode voltar.</p>
+    ${S.trash.length ? `<ul class="plain">${[...S.trash].sort((a, b) => String(b.deleted_at).localeCompare(String(a.deleted_at))).map(t => `<li><span>${esc(t.label)} <small class="note">${KIND[t.tbl] || ""}${t.deleted_by ? ", excluído por " + esc(t.deleted_by) : ""}</small></span><button class="ghost" data-act="restore" data-id="${t.id}">Restaurar</button></li>`).join("")}</ul>` : `<p class="empty">Vazia.</p>`}`}
+    <h2>Visual</h2>
+    <p class="hint">Há uma segunda opção de tela inicial para comparar.</p>
+    <button class="btn" data-act="set-v" data-v="b">Experimentar a opção B</button>`;
+  }
+
+  function vStart() {
+    const tot = shopping(), buy = buyEntries(tot), take = takeEntries(tot), me = meName();
+    const mine = [...buy, ...take].filter(en => isMine(en.r.owner, me));
+    const days = [...S.days].sort((a, b) => a.date.localeCompare(b.date));
+    let n = null;
+    if (days[0]) { const [y, m, dd] = days[0].date.split("-").map(Number); n = Math.ceil((new Date(y, m - 1, dd) - new Date().setHours(0, 0, 0, 0)) / 864e5); }
+    const next = WHEN.map(w => [w, buy.filter(en => keyOf(en, "when_buy") === w && !isDone(en)).length]).find(([, c]) => c);
+    const act = S.recipes.filter(r => recipeCount(r) && r.block !== "Casa"), open = S.pendencias.filter(p => !p.done).length;
+    const cnt = (l, f) => l.filter(f).length;
+    const tile = (tab, sec, title, big, small, sub, cls = "") => `<button class="tile ${cls}" data-go="${tab}" data-sec="${sec}"><span class="tile-t">${title}</span><span class="tile-n">${big}<i>${small}</i></span><span class="tile-s">${sub}</span></button>`;
+    const cols = ["#D7263D", "#FFC62B", "#0B7A8A", "#177A4E", "#6B4FD8", "#FFFFFF", "#FFC62B"];
+    const waves = cols.map((c, k) => { const y = 10 + k * 12, a = k % 2 ? 7 : -7; return `<path d="M-20 ${y} C 60 ${y + a}, 140 ${y - a}, 220 ${y} S 380 ${y + a}, 460 ${y} S 620 ${y - a}, 700 ${y} S 860 ${y + a}, 940 ${y}" stroke="${c}"/>`; }).join("");
+    return `<section class="hero">
+      <div class="top-row"><span>Ano Novo 26/27</span>${client ? `<span class="acct">${esc(who)}<button class="link" data-act="logout">Sair</button></span>` : `<span>modo local</span>`}</div>
+      ${n === null ? "" : n > 0 ? `<p class="count"><b>${n}</b><span>${n === 1 ? "dia para" : "dias para"}<br>a viagem</span></p>` : `<p class="count"><b>Já</b><span>estamos<br>na viagem</span></p>`}
+      <svg class="waves7" viewBox="0 0 900 96" preserveAspectRatio="none" aria-hidden="true">${waves}</svg>
+    </section>
+    <h2 class="vh">Cardápio da semana</h2>
+    <div class="strip">${days.map(d => { const L = dayLabel(d, true), ds = S.menu.filter(m => m.day_id === d.id).sort(byPos).map(m => get("recipes", m.recipe_id)).filter(Boolean);
+      return `<button class="sday ${d.veg_guest ? "veg" : ""}" data-act="goto-day" data-id="${d.id}"><b>${L.dd}</b><span>${L.wk}</span><em>${ds.length ? esc(ds.map(r => r.name.replace(/\s*\(.*\)$/, "")).join(", ")) : "sem prato"}</em></button>`; }).join("")}</div>
+    ${next ? `<button class="nextbuy" data-go="shop"><span>Próxima leva de compras</span><strong>${esc(next[0])}</strong><em>${next[1]} ${next[1] === 1 ? "item por comprar" : "itens por comprar"}</em></button>` : ""}
+    <div class="tiles">
+      ${tile("shop", "compras", "Compras", cnt(buy, isDone), `/${buy.length}`, "itens comprados")}
+      ${tile("take", "levar", "Levar", cnt(take, isDone), `/${take.length}`, "itens separados")}
+      ${tile("mine", "minha", "Minha lista", cnt(mine, isDone), `/${mine.length}`, me ? `itens de ${esc(me)}` : "sem pessoa definida")}
+      ${tile("pend", "pend", "Pendências", open, "", open === 1 ? "em aberto" : "em aberto")}
+      ${tile("recipes", "plano", "Receitas revisadas", cnt(act, r => r.reviewed), `/${act.length}`, "confira antes de alguém comprar", "wide")}
+    </div>
+    <p class="hint"><button class="ghost" data-act="set-v" data-v="a">Voltar para o visual anterior</button></p>`;
   }
 
   function filterShop() {
@@ -582,6 +670,10 @@
         patch.name = v;
       }
       if (["recipes", "extras", "activities"].includes(t) && (f === "name" || f === "item") && !String(v).trim()) return render(true);
+      const cur = get(t, id) || {};
+      if (t === "ingredients" && f === "bought" && hasCol(t, "bought_by")) patch.bought_by = v ? (cur.bought_by || who) : "";
+      if (t === "extras" && f === "done" && cur.buy && hasCol(t, "bought_by")) patch.bought_by = v ? (cur.bought_by || who) : "";
+      if (t === "ingredients" && f === "buy_hint" && hasCol(t, "hint_qty")) patch.hint_qty = (shopping().get(id) || {}).qty ?? null;
       if (t === "ingredients" && f === "from_home" && !v && (get(t, id) || {}).when_buy === HOME) patch.when_buy = "A confirmar";
       if (ui.tab !== "fun" && ((t === "extras" && f === "buy") || (t === "ingredients" && f === "from_home"))) toast((t === "extras") === !!v ? "Foi para a lista de compras." : "Foi para a lista de levar.");
       update(t, id, patch, force);
@@ -596,6 +688,9 @@
         v = cur.sort((a, b) => ((order.indexOf(a) + 999) % 999) - ((order.indexOf(b) + 999) % 999)).join(", ");
       }
       update(t, id, { owner: v }, true);
+    } else if (act === "pend-move") {
+      const r = get("recipes", el.value); if (!r) return;
+      toast(`A pendência foi para a receita ${r.name}.`); update("pendencias", el.dataset.id, { recipe_id: r.id }, true);
     } else if (act === "repoint") {
       const it = get("recipe_items", el.dataset.id), name = el.value.trim();
       if (!it || !name) return render(true);
@@ -619,15 +714,19 @@
   });
   view.addEventListener("focusout", () => setTimeout(() => { if (renderPending) render(false); }, 0));
   document.addEventListener("click", e => {
+    const g = e.target.closest("[data-go]"); if (g) return go(g.dataset.go);
     const el = e.target.closest("[data-act]"); if (!el || /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
     const act = el.dataset.act;
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "open-recipe") { ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
     else if (act === "del") { if (!el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
+    else if (act === "restore") { $("#toast").classList.remove("on"); restore(el.dataset.id); }
+    else if (act === "pend-out") update("pendencias", el.dataset.id, { recipe_id: null }, true);
+    else if (act === "set-v") { ui.v = el.dataset.v; localStorage.setItem("an-v", ui.v); go(ui.v === "b" ? "start" : "menu"); }
     else if (act === "weekly") { const r = get("recipes", el.dataset.id), on = el.dataset.v === "1"; if (r) { toast(on ? `${r.name} entrou na semana toda.` : `${r.name} virou ideia e saiu das compras.`); update("recipes", r.id, { weekly: on }, true); } }
     else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
     else if (act === "ui-set") { ui[el.dataset.f] = el.dataset.v; if (el.dataset.f === "menuView") localStorage.setItem("an-menu-view", el.dataset.v); render(true); }
-    else if (act === "goto-day") { ui.open.add("d-" + el.dataset.id); ui.menuView = "list"; localStorage.setItem("an-menu-view", "list"); render(true); const n = document.getElementById("d-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
+    else if (act === "goto-day") { ui.tab = "menu"; localStorage.setItem("an-tab", "menu"); ui.open.add("d-" + el.dataset.id); ui.menuView = "list"; localStorage.setItem("an-menu-view", "list"); render(true); const n = document.getElementById("d-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
     else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ""; render(true); }
     else if (act === "logout") { client.auth.signOut().then(() => location.reload()); }
   });
@@ -643,7 +742,9 @@
       toast("Receita criada como ideia. Coloque num dia do cardápio para contar nas compras.");
       const n = document.getElementById("r-" + r.id); if (n) n.scrollIntoView({ block: "center" });
     } else if (kind === "add-pend") {
-      add("pendencias", { id: uid(), kind: "Dúvida", subject: v("subject"), detail: v("detail"), answer: "", done: false, pos: nextPos("pendencias") });
+      const row = { id: uid(), kind: "Dúvida", subject: v("subject"), detail: f.querySelector('[name="detail"]') ? v("detail") : "", answer: "", done: false, pos: nextPos("pendencias") };
+      if (f.dataset.recipe) row.recipe_id = f.dataset.recipe;
+      add("pendencias", row);
     } else if (kind === "add-extra") {
       add("extras", { id: uid(), grp: "Levar", item: v("item"), owner: "", done: false, buy: f.dataset.buy === "1", activity_id: f.dataset.activity || null, pos: nextPos("extras") });
     } else if (kind === "new-activity") {
@@ -670,6 +771,11 @@
     if (client && who && !needsSetup && !S.people.some(p => norm(p.name) === norm(who))) {
       const me = { id: uid(), name: who, pos: nextPos("people") }; S.people.push(me); persist("people", me);
     }
+    if (!noTrash) S.trash.filter(t => Date.now() - new Date(t.deleted_at) > 7 * 864e5).forEach(t => { removeLocal("trash", t.id); persistDelete("trash", t.id); });
+    if (client && S.ingredients[0] && "hint_qty" in S.ingredients[0]) { const tot = shopping(); S.ingredients.filter(i => i.buy_hint && i.hint_qty == null && tot.has(i.id)).forEach(i => { i.hint_qty = tot.get(i.id).qty; persist("ingredients", i); }); }
+    if (ui.v === "b" && !sessionStorage.getItem("an-seen")) ui.tab = "start";
+    if (ui.v !== "b" && ui.tab === "start") ui.tab = "menu";
+    sessionStorage.setItem("an-seen", "1");
     $("#login").hidden = true; $("#app").hidden = false; render(true);
   }
   async function boot() {
