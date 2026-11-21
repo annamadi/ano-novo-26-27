@@ -310,6 +310,12 @@
   const paidBy = entries => { const m = new Map(); entries.forEach(en => { const v = Number(en.r.paid) || 0; if (v) m.set(en.r.bought_by || "sem nome", (m.get(en.r.bought_by || "sem nome") || 0) + v); }); return [...m].map(([n, v]) => `${n} R$ ${money.format(v)}`).join("; "); };
   const paidSum = entries => entries.reduce((t, en) => t + (Number(en.r.paid) || 0), 0);
   const foodBlocks = () => FOOD.concat([...new Set(S.recipes.map(r => r.block))].filter(b => !BLOCKS.includes(b)));
+  const short = n => String(n).replace(/\s*\(.*\)$/, "");
+  function byCat(rs) {
+    const m = new Map();
+    [...rs].sort((a, b) => BLOCKS.indexOf(a.block) - BLOCKS.indexOf(b.block)).forEach(r => (m.get(r.block) || m.set(r.block, []).get(r.block)).push(r));
+    return [...m];
+  }
   function recipeOptions(sel) {
     return foodBlocks().map(b => {
       const rs = S.recipes.filter(r => r.block === b).sort(byPos);
@@ -330,7 +336,7 @@
         const [y, m, dd] = d.date.split("-").map(Number), wd = new Date(y, m - 1, dd).getDay(), L = dayLabel(d, true), ds = names(d);
         return `<button class="calday ${d.veg_guest ? "veg" : ""}" style="grid-column:${wd + 1}" data-act="goto-day" data-id="${d.id}" aria-label="Abrir ${L.wk} ${L.dd}">
           <span class="calnum"><b>${L.dd}</b> ${L.mon}</span>
-          ${ds.map(r => `<span class="dish">${esc(r.name)}</span>`).join("") || `<span class="dish none">sem prato</span>`}
+          ${byCat(ds).map(([b, l]) => l.map(r => `<span class="dish">${b === "Jantar" ? "" : `<small class="cat">${esc(b)}</small>`}${esc(short(r.name))}</span>`).join("")).join("") || `<span class="dish none">sem prato</span>`}
           <span class="calfoot">${d.people} pessoas${d.veg_guest ? `<br>opção vegetariana` : ""}</span>
         </button>`;
       }).join("")}</div></div>
@@ -346,11 +352,11 @@
       return `<article class="day ${d.veg_guest ? "veg" : ""}" id="d-${d.id}">
         <button class="day-h chev" data-act="open" data-key="d-${d.id}" aria-expanded="${open}">
           <span class="date"><b>${L.dd}</b><span>${L.wk}</span></span>
-          <span class="day-sum">${ds.length ? `<strong>${ds.map(r => esc(r.name)).join(", ")}</strong>` : `<strong class="none">Sem prato definido</strong>`}
+          <span class="day-sum">${ds.length ? byCat(ds).map(([b, l]) => b === "Jantar" ? `<strong>${l.map(r => esc(r.name)).join(", ")}</strong>` : `<span class="extra"><small class="cat">${esc(b)}</small>${l.map(r => esc(r.name)).join(", ")}</span>`).join("") : `<strong class="none">Sem prato definido</strong>`}
             <small>${d.people} pessoas${d.veg_guest ? ", com opção vegetariana" : ""}${d.breakfast ? "" : ", sem café da manhã"}</small></span>
         </button>
         ${open ? `<div class="day-body">
-          ${entries.map(m => `<div class="entry">
+          ${entries.map(m => `<small class="cat">${esc((get("recipes", m.recipe_id) || {}).block || "")}</small><div class="entry">
             <select data-act="set" data-t="menu" data-id="${m.id}" data-f="recipe_id" aria-label="Prato do dia">${recipeOptions(m.recipe_id)}</select>
             <button class="ghost" data-act="open-recipe" data-id="${m.recipe_id}">Ver receita</button>
             <button class="x" data-act="del" data-t="menu" data-id="${m.id}" aria-label="Tirar do dia">×</button>
@@ -375,10 +381,10 @@
       <ul class="plain">${rs.map(r => { const ds = S.menu.filter(m => m.recipe_id === r.id).map(m => get("days", m.day_id)).filter(Boolean).sort((x, y) => x.date.localeCompare(y.date)).map(d => dayLabel(d));
         const st = r.weekly ? (ds.length ? "semana toda e " + ds.join(", ") : "semana toda") : ds.length ? "só em " + ds.join(", ") : "não vai";
         return `<li class="${recipeCount(r) ? "" : "off"}"><button class="rowlink" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}<small>${esc(st)}</small></button>${r.reviewed ? `<span class="tag ok">revisada</span>` : ""}
-          <label class="sw"><input type="checkbox" data-act="weekly-sw" data-id="${r.id}" ${r.weekly ? "checked" : ""} aria-label="${esc(r.name)}: vai na semana toda"><span></span></label></li>`; }).join("")}</ul>`;
+          <label class="sw"><input type="checkbox" data-act="weekly-sw" data-id="${r.id}" ${recipeCount(r) ? "checked" : ""} aria-label="${esc(r.name)}: está no cardápio"><span></span></label></li>`; }).join("")}</ul>`;
     }).join("")}
-    ${dinnerIdeas.length ? `<h2>Jantares guardados</h2>
-    <p class="hint">Sem dia marcado, ficam fora das compras. Para usar, abra a receita e marque um dia.</p>
+    ${dinnerIdeas.length ? `<h2>Sugestões</h2>
+    <p class="hint">Jantares sem dia marcado. Ficam fora das compras; para usar, abra a receita e marque um dia.</p>
     <ul class="plain">${dinnerIdeas.map(r => `<li><button class="rowlink" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}</button></li>`).join("")}</ul>` : ""}`;
   }
 
@@ -401,6 +407,7 @@
     const qs = S.pendencias.filter(p => p.recipe_id === r.id).sort((a, b) => (a.done - b.done) || byPos(a, b)), qOpen = qs.filter(p => !p.done).length;
     let body = "";
     if (open) body = `<div class="rbody">
+      ${!flat && ui.back === r.id ? `<button class="btn back" data-act="back">Voltar ao cardápio</button>` : ""}
       ${flat ? "" : `      <div class="grid2">
         <label class="fld">Nome${inp("recipes", r.id, "name", r.name)}</label>
         <label class="fld">Tipo<select data-act="set" data-t="recipes" data-id="${r.id}" data-f="block">${[...new Set(BLOCKS.concat(r.block))].map(b => `<option ${b === r.block ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></label>
@@ -410,7 +417,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         <div class="daypick">${[...S.days].sort((a, b) => a.date.localeCompare(b.date)).map(d => { const L = dayLabel(d, true), on = S.menu.some(m => m.day_id === d.id && m.recipe_id === r.id);
           return `<button type="button" class="dchip" data-act="toggle-day" data-r="${r.id}" data-d="${d.id}" aria-pressed="${on}" aria-label="${L.wk} ${L.dd}"><b>${L.dd}</b><small>${L.wk}</small></button>`; }).join("")}
           <button type="button" class="dchip wide" data-act="weekly" data-id="${r.id}" data-v="${r.weekly ? 0 : 1}" aria-pressed="${!!r.weekly}">Semana toda</button></div>
-        <span class="note">Sem nenhum dia marcado, a receita fica como ideia e não entra nas compras.</span></div>`}`}
+        <span class="note">Sem nenhum dia marcado, a receita fica como ideia e não entra nas compras.</span>
+        <button type="button" class="ghost" data-act="back">Ver no cardápio</button></div>`}`}
       <ul class="items">${items.map(it => {
         const g = get("ingredients", it.ingredient_id) || { name: "?", unit: "" };
         const more = ui.open.has(it.id);
@@ -638,7 +646,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     </section>
     <h2 class="vh">Cardápio da semana</h2>
     <div class="strip">${days.map(d => { const L = dayLabel(d, true), ds = S.menu.filter(m => m.day_id === d.id).sort(byPos).map(m => get("recipes", m.recipe_id)).filter(Boolean);
-      return `<button class="sday ${d.veg_guest ? "veg" : ""}" data-act="goto-day" data-id="${d.id}"><b>${L.dd}</b><span>${L.wk}</span><em>${ds.length ? esc(ds.map(r => r.name.replace(/\s*\(.*\)$/, "")).join(", ")) : "sem prato"}</em></button>`; }).join("")}</div>
+      return `<button class="sday ${d.veg_guest ? "veg" : ""}" data-act="goto-day" data-id="${d.id}"><b>${L.dd}</b><span>${L.wk}</span>${ds.length ? byCat(ds).map(([b, l]) => `${b === "Jantar" ? "" : `<small class="cat">${esc(b)}</small>`}<em>${esc(l.map(r => short(r.name)).join(", "))}</em>`).join("") : `<em>sem prato</em>`}</button>`; }).join("")}</div>
     ${next ? `<button class="nextbuy" data-go="shop"><span>Próxima leva de compras</span><strong>${esc(next[0])}</strong><em>${next[1]} ${next[1] === 1 ? "item por comprar" : "itens por comprar"}</em></button>` : ""}
     <div class="tiles">
       ${tile("shop", "compras", "Compras", cnt(buy, isDone), `/${buy.length}`, "itens comprados")}
@@ -704,7 +712,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       update(t, id, { owner: v }, true);
     } else if (act === "weekly-sw") {
       const r = get("recipes", el.dataset.id); if (!r) return;
-      toast(el.checked ? `${r.name} entrou no cardápio da semana.` : `${r.name} saiu do cardápio e das compras.`); update("recipes", r.id, { weekly: el.checked }, true);
+      if (!el.checked) S.menu.filter(m => m.recipe_id === r.id).forEach(m => { removeLocal("menu", m.id); persistDelete("menu", m.id); });
+      toast(el.checked ? `${r.name} entrou no cardápio da semana.` : `${r.name} saiu do cardápio, de todos os dias e das compras.`); update("recipes", r.id, { weekly: el.checked }, true);
     } else if (act === "pend-move") {
       const r = get("recipes", el.value); if (!r) return;
       toast(`A pendência foi para a receita ${r.name}.`); update("pendencias", el.dataset.id, { recipe_id: r.id }, true);
@@ -735,7 +744,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const el = e.target.closest("[data-act]"); if (!el || /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
     const act = el.dataset.act;
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
-    else if (act === "open-recipe") { ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
+    else if (act === "back") { ui.back = null; go("menu"); }
+    else if (act === "open-recipe") { ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
     else if (act === "del") { if (!el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
     else if (act === "restore") { $("#toast").classList.remove("on"); restore(el.dataset.id); }
     else if (act === "pend-out") update("pendencias", el.dataset.id, { recipe_id: null }, true);
@@ -781,7 +791,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   function go(t) {
     if (t === "plano") t = localStorage.getItem("an-plano") || "menu";
     if (!TABS.includes(t)) t = "start";
-    ui.tab = t; localStorage.setItem("an-tab", t);
+    ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null;
     if (SEC[t] === "plano") localStorage.setItem("an-plano", t);
     [...ui.open].filter(k => k.startsWith("own-")).forEach(k => ui.open.delete(k)); render(true); window.scrollTo(0, 0);
   }

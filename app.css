@@ -391,3 +391,14 @@ h2.sec { font-size: 1.5rem; }
 .sw input:focus-visible + span { outline: 3px solid var(--ink); outline-offset: 2px; }
 .rowlink small { display: block; color: var(--muted); font-size: .86rem; font-weight: 400; }
 .plain li.off .rowlink { color: var(--muted); }
+
+/* categorias dentro do dia, e voltar ao cardápio */
+.cat { display: block; font-size: .74rem; font-weight: 600; color: var(--gold-deep); margin-top: 6px; line-height: 1.2; }
+.sday em + .cat, .sday .cat { margin-top: 8px; }
+.sday em { margin-top: 2px; }
+.sday b + span + em { margin-top: 6px; }
+.day-sum .extra { display: block; font-size: .98rem; line-height: 1.25; }
+.day-sum .extra .cat { margin-top: 4px; }
+.dish .cat { margin: 0 0 1px; }
+.day-body > .cat { margin: 8px 0 2px; }
+.btn.back { margin: 12px 0 0; }
