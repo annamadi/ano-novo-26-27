@@ -412,3 +412,19 @@ body.locked { overflow: hidden; }
   @keyframes sheet-up { from { opacity: 0; } }
 }
 @media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+
+/* cabeçalho compacto ao rolar */
+.mini { position: fixed; top: 0; left: 0; right: 0; z-index: 9; height: 48px; background: var(--ink); color: #fff; display: flex; align-items: center; gap: 10px; padding: 0 16px; transform: translateY(-100%); transition: transform .18s; }
+.mini strong { flex: 1; font: 500 1.25rem var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini span { font-size: .9rem; font-weight: 600; color: var(--gold-soft); white-space: nowrap; }
+.mini i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--gold-soft); }
+.mini .link.home { padding: 0; min-width: 44px; }
+body.scrolled .mini { transform: none; }
+body.scrolled .sub { top: 48px; }
+.warn-acts { display: flex; flex-wrap: wrap; gap: 0 14px; }
+.warn .pickpanel.bulk { background: #fff; margin: 4px 0 2px; }
+.icon { width: 44px; height: 44px; }
+.pwrow { display: flex; gap: 6px; align-items: center; }
+.pwrow input { flex: 1; }
+.btn:disabled { opacity: .6; cursor: default; }
+@media (min-width: 900px) { .mini { left: 108px; } }

@@ -229,6 +229,12 @@
   }
   function findIng(name) { const k = norm(name); return S.ingredients.find(i => norm(i.name) === k); }
 
+  function onScroll() {
+    const top = $("#top"), on = ui.tab !== "start" && !top.hidden && window.scrollY > top.offsetHeight - 8;
+    document.body.classList.toggle("scrolled", on);
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+
   /* ---------- render ---------- */
   function render(force) {
     const a = document.activeElement;
@@ -249,6 +255,9 @@
     document.body.classList.toggle("locked", !!shNew);
     view.querySelectorAll("input[placeholder]:not([aria-label])").forEach(i => { if (!i.closest("label")) i.setAttribute("aria-label", i.placeholder); });
     $("#top").innerHTML = ui.tab === "start" ? "" : header();
+    const hs = ui.tab === "start" ? null : headStat(shopping());
+    $("#mini").innerHTML = hs ? `<button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button><strong>${TITLE[ui.tab]}</strong>${hs.n ? `<span>${hs.d} de ${hs.n}</span>` : ""}<i style="width:${hs.n ? Math.round(100 * hs.d / hs.n) : 0}%"></i>` : "";
+    onScroll();
     if (ui.tab === "shop" && ui.q) filterShop();
     if (ui.tab === "recipes" && ui.rq) filterRecipes();
   }
@@ -366,7 +375,7 @@
     entries.forEach(en => { const k = keyOf(en, g); (groups.get(k) || groups.set(k, []).get(k)).push(en); });
     const order = [...groups.keys()].sort((a, b) => g === "when_buy" ? ((WHEN.indexOf(a) + 99) % 99) - ((WHEN.indexOf(b) + 99) % 99) : (a === NONE[g]) - (b === NONE[g]) || a.localeCompare(b, "pt"));
     return order.map(k => {
-      const l = groups.get(k).sort((a, b) => nameOf(a).localeCompare(nameOf(b), "pt")), d = l.filter(isDone).length;
+      const l = groups.get(k).sort((a, b) => (isDone(a) - isDone(b)) || nameOf(a).localeCompare(nameOf(b), "pt")), d = l.filter(isDone).length;
       const key = `g-${scope}-${g}-${k}`, open = ui.open.has(key) !== defOpen;
       bulk.set(key, { name: k, list: l });
       return `<section class="grp">
@@ -452,7 +461,7 @@
     }).join("")}</section>`}
     <h2>Café da manhã <small>${days.filter(d => d.breakfast).length} de ${days.length} dias</small></h2>
     <p class="hint">Marque os dias que vão ter café. Os itens do café contam uma vez, para a semana inteira.</p>
-    <div class="daypick">${days.map(d => { const L = dayLabel(d, true); return `<button type="button" class="dchip" data-act="toggle-bf" data-d="${d.id}" aria-pressed="${!!d.breakfast}" aria-label="Café em ${L.wk} ${L.dd}"><b>${L.dd}</b><small>${L.wk}</small></button>`; }).join("")}</div>
+    <div class="daypick">${days.map(d => { const L = dayLabel(d, true); return `<button type="button" class="dchip" data-act="toggle-bf" data-d="${d.id}" aria-pressed="${!!d.breakfast}" aria-label="Café em ${L.wk} ${L.dd} de ${L.mon}"><b>${L.dd}</b><small>${L.wk}</small></button>`; }).join("")}</div>
     ${S.recipes.filter(r => r.block === CAFE).sort(byPos).map(r => `<button class="ghost" data-act="open-recipe" data-id="${r.id}">Ver itens do café da manhã</button>`).join("")}
     ${foodBlocks().filter(b => b !== "Jantar" && b !== CAFE && b !== VEG).map((b, k) => {
       const rs = S.recipes.filter(r => r.block === b).sort(byPos); if (!rs.length) return "";
@@ -521,7 +530,7 @@
       </div>
 ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum dia com café marcado no Cardápio.</p>` : `      <div class="fld">Quando entra no cardápio
         <div class="daypick">${[...S.days].sort((a, b) => a.date.localeCompare(b.date)).map(d => { const L = dayLabel(d, true), on = S.menu.some(m => m.day_id === d.id && m.recipe_id === r.id);
-          return `<button type="button" class="dchip" data-act="toggle-day" data-r="${r.id}" data-d="${d.id}" aria-pressed="${on}" aria-label="${L.wk} ${L.dd}"><b>${L.dd}</b><small>${L.wk}</small></button>`; }).join("")}
+          return `<button type="button" class="dchip" data-act="toggle-day" data-r="${r.id}" data-d="${d.id}" aria-pressed="${on}" aria-label="${L.wk} ${L.dd} de ${L.mon}"><b>${L.dd}</b><small>${L.wk}</small></button>`; }).join("")}
           <button type="button" class="dchip wide" data-act="weekly" data-id="${r.id}" data-v="${r.weekly ? 0 : 1}" aria-pressed="${!!r.weekly}">Semana toda</button></div>
         <span class="note">Sem nenhum dia marcado, a receita fica como ideia e não entra nas compras.</span>
         <button type="button" class="ghost" data-act="back">Ver no cardápio</button></div>`}`}
@@ -613,7 +622,15 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <button class="imain" data-act="open" data-key="${i.id}" aria-expanded="${open}">
         <span class="iname2">${esc(i.name)}</span><span class="iqty2">${esc(fmtQty(e.qty, i.unit))}</span>
         <span class="isub">${stale || hintDup ? "" : esc(i.buy_hint)}</span>
-        <span class="chips">${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${g !== "sector" && secOf(i) ? `<span class="tag">${esc(secOf(i))}</span>` : ""}${g !== "when_buy" && whenOf(i) && !isHome(i) ? `<span class="tag">${esc(whenOf(i))}</span>` : ""}${isFreeze(i) && !isHome(i) ? `<span class="tag">congelar</span>` : ""}${g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}${i.bought && i.bought_by ? `<span class="tag ok">pago por ${esc(i.bought_by)}</span>` : ""}</span>
+        <span class="chips">${(() => { const t = [
+          pend ? `<span class="tag sug">receita a revisar</span>` : "",
+          i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : "",
+          i.bought && i.bought_by ? `<span class="tag ok">pago por ${esc(i.bought_by)}</span>` : "",
+          g !== "sector" && secOf(i) ? `<span class="tag">${esc(secOf(i))}</span>` : "",
+          g !== "when_buy" && whenOf(i) && !isHome(i) ? `<span class="tag">${esc(whenOf(i))}</span>` : "",
+          isFreeze(i) && !isHome(i) ? `<span class="tag">congelar</span>` : "",
+          g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""].filter(Boolean);
+          return open || t.length <= 2 ? t.join("") : t.slice(0, 2).join("") + `<span class="tag">+${t.length - 2}</span>`; })()}</span>
       </button>
       ${open ? `<div class="ibody">
         <div class="grid2">
@@ -680,10 +697,12 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   function vTake() {
     const tot = shopping(), all = takeEntries(tot);
     const shown = all.filter(en => passF(en, { who: ui.tWho, status: ui.tStatus }));
-    const orphan = all.filter(en => !en.r.owner && !isDone(en)).map(nameOf);
+    const orphans = all.filter(en => !en.r.owner && !isDone(en)), orphan = orphans.map(nameOf);
+    bulk.set("orphans", { name: "Sem responsável", list: orphans });
     return `<p class="lead">O que vem de casa: comida pronta, itens de uso geral e o que as atividades precisam. Marque quando estiver separado.</p>
     ${orphan.length ? `<div class="warn"><strong>${orphan.length} ${orphan.length === 1 ? "item sem responsável" : "itens sem responsável"}:</strong> ${esc(orphan.slice(0, 8).join(", "))}${orphan.length > 8 ? ` e mais ${orphan.length - 8}` : ""}.
-      ${ui.tWho === "-" ? "" : `<button class="ghost" data-act="ui-set" data-f="tWho" data-v="-">Ver só esses</button>`}</div>` : ""}
+      <span class="warn-acts"><button class="ghost" data-act="open" data-key="bulk-orphans">Atribuir responsável</button>${ui.tWho === "-" ? "" : `<button class="ghost" data-act="ui-set" data-f="tWho" data-v="-">Ver só esses</button>`}</span>
+      ${bulkPanel("orphans")}</div>` : ""}
     <div class="shopbar">${seg3("tStatus", ["Tudo", "Falta", "Separado"])}</div>
     <div class="fchips" role="group" aria-label="Filtros">${pill("tWho", "Pessoa", people2())}${ui.tWho || ui.tStatus ? `<button class="ghost" data-act="clear-take">Limpar</button>` : ""}</div>
     ${groupList(shown, "origin", tot, "h2", "take") || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada na lista ainda."}</p>`}
@@ -775,8 +794,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     S.recipe_items.forEach(it => { if (!nextIds.has(it.ingredient_id)) return; const r = get("recipes", it.recipe_id); if (r && !r.reviewed && recipeCount(r)) todo.set(r.id, (todo.get(r.id) || 0) + 1); });
     const cnt = (l, f) => l.filter(f).length;
     const tile = (tab, sec, title, big, small, sub, cls = "") => `<button class="tile ${cls}" data-go="${tab}" data-sec="${sec}"><span class="tile-t">${title}</span><span class="tile-n">${big}<i>${small}</i></span><span class="tile-s">${sub}</span></button>`;
-    const cols = ["#D7263D", "#FFC62B", "#0B7A8A", "#177A4E", "#6B4FD8", "#FFFFFF", "#FFC62B"];
-    const waves = cols.map((c, k) => { const y = 10 + k * 12, a = k % 2 ? 7 : -7; return `<path d="M-20 ${y} C 60 ${y + a}, 140 ${y - a}, 220 ${y} S 380 ${y + a}, 460 ${y} S 620 ${y - a}, 700 ${y} S 860 ${y + a}, 940 ${y}" stroke="${c}"/>`; }).join("");
+    const waves = [0, 1, 2, 3, 4, 5, 6].map(k => { const y = 10 + k * 12, a = k % 2 ? 7 : -7; return `<path d="M-20 ${y} C 60 ${y + a}, 140 ${y - a}, 220 ${y} S 380 ${y + a}, 460 ${y} S 620 ${y - a}, 700 ${y} S 860 ${y + a}, 940 ${y}"/>`; }).join("");
     return `<section class="hero">
       <div class="top-row"><span>Ano Novo 26/27</span>${client ? `<span class="acct">${esc(who)}<button class="link" data-go="cfg">Ajustes</button></span>` : `<span>modo local</span>`}</div>
       ${n === null ? "" : n > 0 ? `<p class="count"><b>${n}</b><span>${n === 1 ? "dia para" : "dias para"}<br>a viagem</span></p>` : `<p class="count"><b>Já</b><span>estamos<br>na viagem</span></p>`}
@@ -935,7 +953,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "back") { ui.back = null; go("menu"); }
     else if (act === "open-recipe") { ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
-    else if (act === "del") { if (!el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
+    else if (act === "del") { const safe = KIND[el.dataset.t] && !noTrash; if (safe || !el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
     else if (act === "bulk-owner") {
       const b = bulk.get(el.dataset.key), who2 = el.closest(".bulk").querySelector("select").value; if (!b) return;
       let n = 0;
@@ -1049,11 +1067,14 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       const setWho = u => { const n = ((u && u.email) || "").split("@")[0]; who = n ? n[0].toUpperCase() + n.slice(1) : ""; };
       if (data.session) { setWho(data.session.user); return start(); }
       $("#login").hidden = false; $("#who").focus();
+      $("#pw-show").addEventListener("click", e => { const p = $("#pw"), show = p.type === "password"; p.type = show ? "text" : "password"; e.currentTarget.textContent = show ? "Ocultar" : "Mostrar"; e.currentTarget.setAttribute("aria-pressed", show); });
       $("#login-form").addEventListener("submit", async e => {
         e.preventDefault(); $("#login-err").textContent = "";
         const slug = $("#who").value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
         if (!slug) { $("#login-err").textContent = "Digite seu username."; return; }
+        const btn = $("#login-form button[type=submit]"); btn.disabled = true; btn.textContent = "Entrando…";
         const { data: auth, error } = await client.auth.signInWithPassword({ email: `${slug}@${CFG.loginDomain}`, password: $("#pw").value });
+        btn.disabled = false; btn.textContent = "Entrar";
         if (!error) setWho(auth.user);
         if (error) { $("#login-err").textContent = /invalid/i.test(error.message) ? "Username ou senha não conferem. Confira com o grupo e tente de novo." : "Não foi possível entrar. Confira a conexão e tente de novo."; return; }
         start();

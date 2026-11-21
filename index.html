@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400&family=Sofia+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="site.css?v=202611210405">
+<link rel="stylesheet" href="site.css?v=202611210411">
 </head>
 <body>
 <div id="login" class="login" hidden>
@@ -18,9 +18,9 @@
     <h1>Ano Novo 26/27</h1>
     <p>Entre com seu username e a senha do grupo para ver e editar o plano da viagem.</p>
     <label for="who">Username</label>
-    <input id="who" type="text" autocomplete="username" autocapitalize="none" required>
+    <input id="who" type="text" autocomplete="username" autocapitalize="none" enterkeyhint="next" required>
     <label for="pw">Senha do grupo</label>
-    <input id="pw" type="password" autocomplete="current-password" required>
+    <div class="pwrow"><input id="pw" type="password" autocomplete="current-password" enterkeyhint="go" required><button type="button" id="pw-show" class="ghost" aria-pressed="false">Mostrar</button></div>
     <button class="btn primary" type="submit">Entrar</button>
     <p id="login-err" class="err" role="alert"></p>
   </form>
@@ -28,6 +28,7 @@
 
 <div id="app" hidden data-sec="plano">
   <a class="skip" href="#view">Pular para o conteúdo</a>
+  <div class="mini" id="mini"></div>
   <header class="top" id="top"></header>
   <nav class="sub" id="sub" aria-label="Planejamento">
     <button data-tab="menu">Cardápio</button>
@@ -48,7 +49,7 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=202611210405"></script>
-<script src="app.js?v=202611210405"></script>
+<script src="config.js?v=202611210411"></script>
+<script src="app.js?v=202611210411"></script>
 </body>
 </html>
