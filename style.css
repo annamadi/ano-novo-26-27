@@ -174,7 +174,7 @@ h3 { font: 700 1rem var(--body); margin: 18px 0 2px; color: var(--pool-deep); }
 .calnum { font-size: .82rem; color: var(--muted); font-weight: 600; }
 .calnum b { font: 800 1.5rem/1 var(--display); color: var(--pool); margin-right: 2px; }
 .calday.veg .calnum b { color: var(--leaf); }
-.dish { font-size: .86rem; font-weight: 700; line-height: 1.2; background: var(--water); border-radius: 8px; padding: 4px 6px; overflow-wrap: anywhere; }
+.dish { font-size: .8rem; font-weight: 700; line-height: 1.2; background: var(--water); border-radius: 8px; padding: 4px 5px; overflow-wrap: break-word; hyphens: auto; }
 .dish.none { background: none; color: var(--muted); font-weight: 500; font-style: italic; padding-left: 0; }
 .calfoot { margin-top: auto; font-size: .76rem; color: var(--muted); }
 .recipe.flat .rbody { border-top: 0; padding-top: 2px; }
