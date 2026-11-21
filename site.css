@@ -382,3 +382,12 @@ select.pill.on { background-color: var(--ink); border-color: var(--ink); color: 
   .calwrap { width: min(1080px, calc(100vw - 140px)); margin-left: 50%; transform: translateX(-50%); overflow-x: visible; padding: 0 0 6px; }
   .cal { min-width: 0; }
 }
+
+/* calendário numa linha só; lista de "usado em" */
+.cal { grid-template-columns: repeat(var(--n, 8), minmax(116px, 1fr)); min-width: calc(var(--n, 8) * 124px); }
+.calnum { white-space: nowrap; }
+.useslist { list-style: none; margin: 2px 0 0; padding: 0; }
+.useslist li { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); }
+.useslist .ghost { padding: 0; text-align: left; white-space: normal; }
+.useslist span { font-size: .9rem; color: var(--muted); white-space: nowrap; }
+@media (min-width: 900px) { .cal { min-width: 0; } }

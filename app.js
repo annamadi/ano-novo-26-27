@@ -198,7 +198,7 @@
       const e = tot.get(it.ingredient_id) || { qty: 0, uses: [] };
       e.qty += (Number(it.qty) || 0) * c;
       const r = get("recipes", it.recipe_id);
-      e.uses.push({ name: r.name, qty: it.qty, times: c });
+      e.uses.push({ id: r.id, name: r.name, qty: it.qty, times: c });
       tot.set(it.ingredient_id, e);
     }
     return tot;
@@ -400,12 +400,11 @@
     const days = [...S.days].sort((a, b) => a.date.localeCompare(b.date));
     const dinnerIdeas = S.recipes.filter(r => (r.block === "Jantar" || r.block === VEG) && recipeCount(r) === 0).sort(byPos);
     const names = d => S.menu.filter(m => m.day_id === d.id).sort(byPos).map(m => get("recipes", m.recipe_id)).filter(Boolean);
-    const cal = () => `<div class="calwrap"><div class="cal">
-      ${["dom", "seg", "ter", "qua", "qui", "sex", "sáb"].map(w => `<div class="calhead">${w}</div>`).join("")}
+    const cal = () => `<div class="calwrap"><div class="cal" style="--n:${days.length}">
       ${days.map(d => {
         const [y, m, dd] = d.date.split("-").map(Number), wd = new Date(y, m - 1, dd).getDay(), L = dayLabel(d, true), ds = names(d);
-        return `<button class="calday ${d.veg_guest ? "veg" : ""}" style="grid-column:${wd + 1}" data-act="goto-day" data-id="${d.id}" aria-label="Abrir ${L.wk} ${L.dd}">
-          <span class="calnum"><b>${L.dd}</b> ${L.mon}</span>
+        return `<button class="calday ${d.veg_guest ? "veg" : ""}" data-act="goto-day" data-id="${d.id}" aria-label="Abrir ${L.wk} ${L.dd}">
+          <span class="calnum"><b>${L.dd}</b> ${L.wk}, ${L.mon}</span>
           ${byCat(ds).map(([b, l]) => l.map(r => `<span class="dish">${b === "Jantar" ? "" : `<small class="cat">${esc(b === VEG ? "Vegetariana" : b)}</small>`}${esc(short(r.name))}</span>`).join("")).join("") || `<span class="dish none">sem prato</span>`}
           <span class="calfoot">${d.people} pessoas${d.veg_guest && !ds.some(r => r.block === VEG) && !d.veg_option ? `<br><b>falta opção vegetariana</b>` : ""}</span>
         </button>`;
@@ -620,7 +619,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         ${chk("ingredients", i.id, "from_home", isHome(i), "Vem de casa (alguém leva, não precisa comprar; vai para a aba Levar)")}
         <label class="fld">Observação${area("ingredients", i.id, "note", i.note, "Marca, tipo, onde achar")}</label>
         ${pend ? `<p class="uses todo">Falta revisar: ${pend.map(esc).join(", ")}. Confirme a receita antes de comprar.</p>` : ""}
-        <p class="uses">Usado em: ${e.uses.map(u => `${esc(u.name)} (${esc(fmtQty(u.qty, i.unit))}${u.times > 1 ? " × " + u.times : ""})`).join("; ")}</p>
+        <p class="uses">Usado em:</p>
+        <ul class="useslist">${e.uses.map(u => `<li><button class="ghost" data-act="open-recipe" data-id="${u.id}">${esc(u.name)}</button><span>${esc(fmtQty(u.qty, i.unit))}${u.times > 1 ? " × " + u.times : ""}</span></li>`).join("")}</ul>
       </div>` : (i.note ? `<p class="inote">${esc(i.note)}</p>` : "")}
     </li>`;
   }
