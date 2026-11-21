@@ -6,6 +6,8 @@
   const TABLES = ["ingredients", "recipes", "recipe_items", "days", "menu", "pendencias", "extras", "people", "activities"];
   const OPTIONAL = new Set(["people", "activities"]);
   const TABS = ["menu", "recipes", "home", "fun", "shop", "take", "mine", "pend"];
+  const SEC = { menu: "plano", recipes: "plano", home: "plano", fun: "plano", shop: "compras", take: "levar", mine: "minha", pend: "pend" };
+  const TITLE = { menu: "Cardápio", recipes: "Receitas", home: "Casa", fun: "Entretenimento", shop: "Compras", take: "Levar", mine: "Minha lista", pend: "Pendências" };
   const PREFIX = "an_";
   const LS_KEY = "ano-novo-2627";
   const BLOCKS = ["Jantar", "Café da manhã", "Snacks", "Sobremesa", "Bebidas", "Casa"];
@@ -140,17 +142,50 @@
     const a = document.activeElement;
     if (!force && a && view.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "checkbox") { renderPending = true; return; }
     renderPending = false;
-    document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
+    const sec = SEC[ui.tab];
+    $("#app").dataset.sec = sec;
+    document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.sec === sec ? "page" : "false"));
+    $("#sub").hidden = sec !== "plano";
+    document.querySelectorAll("#sub button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY;
     revMap = unreviewed();
     view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-03.sql).</p>` : "") +
       ({ menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
     window.scrollTo(0, y);
-    const be = buyEntries(shopping());
-    $("#status").innerHTML = `${be.filter(isDone).length} de ${be.length} itens comprados` +
-      (client ? ` <span class="who">${esc(who)}</span> <button class="link" data-act="logout">Sair</button>` : ` <span class="local">modo local: os dados ficam só neste navegador</span>`);
+    view.querySelectorAll("input[placeholder]:not([aria-label])").forEach(i => { if (!i.closest("label")) i.setAttribute("aria-label", i.placeholder); });
+    $("#top").innerHTML = header();
     if (ui.tab === "shop" && ui.q) filterShop();
   }
+  const meName = () => { const names = peopleNames(); return ui.me || names.find(n => norm(n) === norm(who)) || who || names[0] || ""; };
+  function headStat(tot) {
+    const c = (l, f) => l.filter(f).length, t = ui.tab;
+    if (t === "shop") { const l = buyEntries(tot), d = c(l, isDone); return { d, n: l.length, text: `${d} de ${l.length} itens comprados.` }; }
+    if (t === "take") { const l = takeEntries(tot), d = c(l, isDone); return { d, n: l.length, text: `${d} de ${l.length} itens separados.` }; }
+    if (t === "mine") { const me = meName(), l = [...buyEntries(tot), ...takeEntries(tot)].filter(en => isMine(en.r.owner, me)), d = c(l, isDone); return { d, n: l.length, text: me ? `${d} de ${l.length} itens de ${me} resolvidos.` : "Cadastre as pessoas do grupo." }; }
+    if (t === "pend") { const d = c(S.pendencias, p => p.done); return { d, n: S.pendencias.length, text: `${d} de ${S.pendencias.length} pendências resolvidas.` }; }
+    if (t === "recipes") { const l = S.recipes.filter(r => recipeCount(r) && r.block !== "Casa"), d = c(l, r => r.reviewed); return { d, n: l.length, text: `${d} de ${l.length} receitas do cardápio revisadas.` }; }
+    if (t === "home") {
+      const ids = new Set(S.recipes.filter(r => r.block === "Casa")), ings = new Set(S.recipe_items.filter(i => ids.has(get("recipes", i.recipe_id))).map(i => i.ingredient_id));
+      const a = S.ingredients.filter(i => ings.has(i.id)), b = S.extras.filter(e => !e.activity_id), d = c(a, i => i.bought) + c(b, e => e.done), n = a.length + b.length;
+      return { d, n, text: `${d} de ${n} itens da casa resolvidos.` };
+    }
+    if (t === "fun") { const l = S.extras.filter(e => e.activity_id), d = c(l, e => e.done); return { d, n: l.length, text: l.length ? `${d} de ${l.length} itens das atividades resolvidos.` : `${S.activities.length} atividades, nenhuma com itens ainda.` }; }
+    const days = [...S.days].sort((a, b) => a.date.localeCompare(b.date)), d = c(days, x => S.menu.some(m => m.day_id === x.id));
+    let left = "";
+    if (days[0]) { const [y, m, dd] = days[0].date.split("-").map(Number), n = Math.ceil((new Date(y, m - 1, dd) - new Date().setHours(0, 0, 0, 0)) / 864e5); if (n > 0) left = n === 1 ? "Falta 1 dia. " : `Faltam ${n} dias. `; }
+    return { d, n: days.length, text: `${left}${d} de ${days.length} dias com prato definido.` };
+  }
+  function header() {
+    const st = headStat(shopping()), pct = st.n ? Math.round(100 * st.d / st.n) : 0;
+    return `<div class="top-in">
+      <div class="top-row"><span>Ano Novo 26/27</span>${client ? `<span class="acct">${esc(who)}<button class="link" data-act="logout">Sair</button></span>` : `<span>modo local, só neste navegador</span>`}</div>
+      <h1>${TITLE[ui.tab]}</h1>
+      <p class="status">${esc(st.text)}</p>
+      <div class="meter" role="img" aria-label="${pct}% concluído"><i style="width:${pct}%"></i></div>
+    </div>
+    <svg class="wave" viewBox="0 0 1200 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 18 C 100 2, 200 34, 300 18 S 500 2, 600 18 S 800 34, 900 18 S 1100 2, 1200 18 V40 H0 Z"/></svg>`;
+  }
+  const tick = (t, id, f, val, label) => `<label class="tick"><input type="checkbox" data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" ${val ? "checked" : ""} aria-label="${esc(label)}"><span></span></label>`;
   const datalists = () => `<datalist id="dl-ings">${S.ingredients.map(i => `<option value="${esc(i.name)}">`).join("")}</datalist>
     <datalist id="dl-stores">${[...new Set([...S.ingredients, ...S.extras].map(i => i.store).filter(Boolean))].sort().map(o => `<option value="${esc(o)}">`).join("")}</datalist>
     <datalist id="dl-sectors">${[...new Set(SECTORS.concat(S.ingredients.map(i => i.sector).filter(Boolean)))].sort((a, b) => a.localeCompare(b, "pt")).map(o => `<option value="${esc(o)}">`).join("")}</datalist>`;
@@ -178,7 +213,7 @@
   function xRow(e, showAct) {
     const a = showAct && e.activity_id ? get("activities", e.activity_id) : null;
     return `<li class="xrow ${e.done ? "done" : ""}" data-name="${esc(norm(e.item))}">
-      <input type="checkbox" class="big" data-act="set" data-t="extras" data-id="${e.id}" data-f="done" ${e.done ? "checked" : ""} aria-label="${e.buy ? "Comprado" : "Separado"}: ${esc(e.item)}">
+      ${tick("extras", e.id, "done", e.done, (e.buy ? "Comprado: " : "Separado: ") + e.item)}
       ${inp("extras", e.id, "item", e.item, 'aria-label="Item"')}
       <button class="x" data-act="del" data-t="extras" data-id="${e.id}" aria-label="Excluir ${esc(e.item)}">×</button>
       <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}
@@ -220,13 +255,18 @@
     if (f.type && keyOf(en, "type") !== f.type) return false;
     return true;
   }
-  function groupList(entries, g, tot, tag = "h2") {
+  function groupList(entries, g, tot, tag = "h2", scope = "", defOpen = true) {
     const groups = new Map();
     entries.forEach(en => { const k = keyOf(en, g); (groups.get(k) || groups.set(k, []).get(k)).push(en); });
     const order = [...groups.keys()].sort((a, b) => g === "when_buy" ? ((WHEN.indexOf(a) + 99) % 99) - ((WHEN.indexOf(b) + 99) % 99) : (a === NONE[g]) - (b === NONE[g]) || a.localeCompare(b, "pt"));
     return order.map(k => {
-      const l = groups.get(k).sort((a, b) => nameOf(a).localeCompare(nameOf(b), "pt"));
-      return `<${tag} class="grp">${esc(k)} <small>${l.filter(isDone).length}/${l.length}</small></${tag}><ul class="shop xlist">${l.map(en => en.k === "i" ? vItem(en.r, tot.get(en.r.id), g) : xRow(en.r, g !== "origin")).join("")}</ul>`;
+      const l = groups.get(k).sort((a, b) => nameOf(a).localeCompare(nameOf(b), "pt")), d = l.filter(isDone).length;
+      const key = `g-${scope}-${g}-${k}`, open = ui.open.has(key) !== defOpen;
+      return `<section class="grp">
+        <${tag} class="grp-h"><button class="chev" data-act="open" data-key="${esc(key)}" aria-expanded="${open}">
+          <span class="grp-n">${esc(k)}</span><span class="grp-c">${d} de ${l.length}</span><span class="grp-m" aria-hidden="true"><i style="width:${Math.round(100 * d / l.length)}%"></i></span></button></${tag}>
+        <ul class="shop xlist" data-closed="${open ? 0 : 1}" ${open ? "" : "hidden"}>${l.map(en => en.k === "i" ? vItem(en.r, tot.get(en.r.id), g) : xRow(en.r, g !== "origin")).join("")}</ul>
+      </section>`;
     }).join("");
   }
   const sel = (f, opts) => `<select data-act="ui" data-f="${f}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${ui[f] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
@@ -244,7 +284,7 @@
     const days = [...S.days].sort((a, b) => a.date.localeCompare(b.date));
     const weekly = S.recipes.filter(r => r.weekly && r.block !== "Casa").sort(byPos);
     const ideas = S.recipes.filter(r => recipeCount(r) === 0 && r.block !== "Casa").sort(byPos);
-    const row = (r, on) => `<li>${chk("recipes", r.id, "weekly", on, esc(r.name))}${r.reviewed ? `<span class="tag home">revisada</span>` : ""}<button class="ghost" data-act="open-recipe" data-id="${r.id}">Ver receita</button></li>`;
+    const row = (r, on) => `<li><button class="rowlink" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}</button>${r.reviewed ? `<span class="tag ok">revisada</span>` : ""}<button class="ghost" data-act="weekly" data-id="${r.id}" data-v="${on ? 0 : 1}">${on ? "Tirar" : "Pôr na semana"}</button></li>`;
     const byBlock = (list, on) => foodBlocks().map(b => { const l = list.filter(r => r.block === b); return l.length ? `<h3 class="grp">${esc(b)} <small>${l.length}</small></h3><ul class="plain">${l.map(r => row(r, on)).join("")}</ul>` : ""; }).join("");
     const names = d => S.menu.filter(m => m.day_id === d.id).sort(byPos).map(m => get("recipes", m.recipe_id)).filter(Boolean);
     const cal = () => `<div class="calwrap"><div class="cal">
@@ -258,17 +298,21 @@
         </button>`;
       }).join("")}</div></div>
       <p class="hint">Toque num dia para abrir e editar.</p>`;
-    return `<p class="lead">Troque ou adicione pratos em cada dia. A lista de compras se refaz sozinha com o que estiver aqui.</p>
+    return `<p class="lead">Toque num dia para trocar o prato. A lista de compras se refaz sozinha com o que estiver aqui.</p>
     <div class="seg" role="group" aria-label="Visualização">
       <button data-act="ui-set" data-f="menuView" data-v="list" aria-pressed="${ui.menuView !== "cal"}">Lista</button>
       <button data-act="ui-set" data-f="menuView" data-v="cal" aria-pressed="${ui.menuView === "cal"}">Calendário</button>
     </div>
     ${ui.menuView === "cal" ? cal() : `<section class="days">${days.map(d => {
-      const L = dayLabel(d, true);
-      const entries = S.menu.filter(m => m.day_id === d.id).sort(byPos);
+      const L = dayLabel(d, true), open = ui.open.has("d-" + d.id);
+      const entries = S.menu.filter(m => m.day_id === d.id).sort(byPos), ds = names(d);
       return `<article class="day ${d.veg_guest ? "veg" : ""}" id="d-${d.id}">
-        <div class="date"><b>${L.dd}</b><span>${L.wk}, ${L.mon}</span></div>
-        <div class="day-body">
+        <button class="day-h chev" data-act="open" data-key="d-${d.id}" aria-expanded="${open}">
+          <span class="date"><b>${L.dd}</b><span>${L.wk}</span></span>
+          <span class="day-sum">${ds.length ? `<strong>${ds.map(r => esc(r.name)).join(", ")}</strong>` : `<strong class="none">Sem prato definido</strong>`}
+            <small>${d.people} pessoas${d.veg_guest ? ", com opção vegetariana" : ""}${d.breakfast ? "" : ", sem café da manhã"}</small></span>
+        </button>
+        ${open ? `<div class="day-body">
           ${entries.map(m => `<div class="entry">
             <select data-act="set" data-t="menu" data-id="${m.id}" data-f="recipe_id" aria-label="Prato do dia">${recipeOptions(m.recipe_id)}</select>
             <button class="ghost" data-act="open-recipe" data-id="${m.recipe_id}">Ver receita</button>
@@ -282,10 +326,10 @@
           </div>
           ${d.veg_guest ? `<label class="fld vegopt">Opção vegetariana${area("days", d.id, "veg_option", d.veg_option, "Qual é a alternativa vegetariana deste dia")}</label>` : ""}
           <label class="fld">Observações${area("days", d.id, "notes", d.notes, "Lembretes do dia")}</label>
-        </div></article>`;
+        </div>` : ""}</article>`;
     }).join("")}</section>`}
     <h2>A semana toda</h2>
-    <p class="hint">Contam uma vez nas compras, sem dia marcado.</p>
+    <p class="hint">Contam uma vez nas compras, sem dia marcado. "Tirar" manda a receita para as ideias e os ingredientes dela saem das compras.</p>
     ${byBlock(weekly, true)}
     <h2>Ideias fora do cardápio</h2>
     <p class="hint">Não entram nas compras até irem para um dia ou para a semana toda.</p>
@@ -295,7 +339,7 @@
   function vRecipes() {
     const blocks = foodBlocks();
     const active = S.recipes.filter(r => recipeCount(r));
-    return `<p class="lead">${active.filter(r => r.reviewed).length} de ${active.length} receitas do cardápio revisadas. Enquanto uma receita não for revisada, os ingredientes dela ficam com aviso na lista de compras.</p>
+    return `<p class="lead">Enquanto uma receita não for revisada, os ingredientes dela ficam com aviso na lista de compras.</p>
     <form class="newrow" data-form="new-recipe">
       <input name="name" placeholder="Nome da receita nova" required>
       <select name="block" aria-label="Tipo">${FOOD.map(b => `<option>${b}</option>`).join("")}</select>
@@ -310,9 +354,6 @@
     const items = S.recipe_items.filter(i => i.recipe_id === r.id).sort(byPos);
     let body = "";
     if (open) body = `<div class="rbody">
-      <div class="review ${r.reviewed ? "ok" : ""}">${r.reviewed
-        ? `<span>Revisada${r.reviewed_by ? " por " + esc(r.reviewed_by) : ""}. Ingredientes e quantidades confirmados.</span><button class="ghost" data-act="review" data-id="${r.id}" data-v="0">Desfazer</button>`
-        : `<span>Confira ingredientes e quantidades antes de alguém comprar.</span><button class="btn primary" data-act="review" data-id="${r.id}" data-v="1">Marcar como revisada</button>`}</div>
       ${flat ? "" : `      <div class="grid2">
         <label class="fld">Nome${inp("recipes", r.id, "name", r.name)}</label>
         <label class="fld">Tipo<select data-act="set" data-t="recipes" data-id="${r.id}" data-f="block">${[...new Set(BLOCKS.concat(r.block))].map(b => `<option ${b === r.block ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></label>
@@ -342,15 +383,19 @@
         <input name="unit" placeholder="un, g, lata…">
         <button class="btn">Adicionar</button>
       </form>
+      <div class="review ${r.reviewed ? "ok" : ""}">${r.reviewed
+        ? `<span>Revisada${r.reviewed_by ? " por " + esc(r.reviewed_by) : ""}. Ingredientes e quantidades confirmados.</span><button class="ghost" data-act="review" data-id="${r.id}" data-v="0">Desfazer</button>`
+        : `<span>Conferiu ingredientes e quantidades? Só marque depois de ler a lista.</span><button class="btn primary" data-act="review" data-id="${r.id}" data-v="1">Marcar como revisada</button>`}</div>
       ${flat ? "" : `      <p class="hint">Trocar o nome aqui troca o ingrediente só nesta receita. Para renomear em todas, use a aba Compras.</p>
       <label class="fld">Modo de preparo e notas<textarea data-act="set" data-t="recipes" data-id="${r.id}" data-f="prep" rows="${Math.min(12, Math.max(3, (r.prep || "").split("\n").length + 1))}" placeholder="Passos, dicas, quem faz">${esc(r.prep)}</textarea></label>
       <button class="btn danger" data-act="del" data-t="recipes" data-id="${r.id}" data-confirm="Excluir a receita ${esc(r.name)}?">Excluir receita</button>`}
     </div>`;
     if (flat) return `<article class="recipe open flat" id="r-${r.id}">${body}</article>`;
     return `<article class="recipe ${open ? "open" : ""}" id="r-${r.id}">
-      <button class="rhead" data-act="open" data-key="${r.id}" aria-expanded="${open}">
+      <button class="rhead chev" data-act="open" data-key="${r.id}" aria-expanded="${open}"><span>
         <span class="rname">${esc(r.name)}</span>
-        <span class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)} / ${items.length} ${items.length === 1 ? "item" : "itens"}${st.idea ? "" : r.reviewed ? ` / <b class="rok">revisada</b>` : ` / <b class="rtodo">a revisar</b>`}</span>
+        <span class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)}, ${items.length} ${items.length === 1 ? "item" : "itens"}</span></span>
+        ${st.idea ? "" : r.reviewed ? `<span class="tag ok">revisada</span>` : `<span class="tag sug">a revisar</span>`}
       </button>${body}</article>`;
   }
 
@@ -376,9 +421,8 @@
       <label class="fld">Comida ou item ${pick("fType", "Os dois")}</label>
       <label class="fld">Revisão ${sel("fRev", [["", "Tudo"], ["ok", "Receitas revisadas"], ["todo", "Receita a revisar"]])}</label>` : ""}
     </div>
-    <p class="hint">${all.filter(isDone).length} de ${all.length} itens comprados${paid ? `, R$ ${money.format(paid)} pagos até agora` : ""}.
-      ${active || ui.fStatus ? `Mostrando ${shown.length}. <button class="ghost" data-act="clear-filters">Limpar filtros</button>` : ""}</p>
-    ${groupList(shown, ui.group, tot) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
+    ${paid || active || ui.fStatus ? `<p class="hint">${paid ? `R$ ${money.format(paid)} pagos até agora. ` : ""}${active || ui.fStatus ? `Mostrando ${shown.length} de ${all.length} itens. <button class="ghost" data-act="clear-filters">Limpar filtros</button>` : ""}</p>` : `<p class="hint">Toque num grupo para abrir a lista.</p>`}
+    ${groupList(shown, ui.group, tot, "h2", active || ui.fStatus ? "shopf" : "shop", !!(active || ui.fStatus)) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
     <form class="newrow" data-form="add-extra" data-buy="1"><input name="item" placeholder="Adicionar compra que não é comida" required><button class="btn">Adicionar</button></form>
     <p class="hint">O que vem de casa fica na aba Levar. Itens de Levar e Entretenimento marcados com "Precisa comprar" aparecem aqui.</p>
     ${unused.length ? `<details class="unused"><summary>Fora do cardápio (${unused.length})</summary>
@@ -388,7 +432,7 @@
   function vItem(i, e, g) {
     const open = ui.open.has(i.id), done = i.bought, pend = revMap.get(i.id);
     return `<li class="item ${done ? "done" : ""}" data-name="${esc(norm(i.name))}">
-      <input type="checkbox" class="big" data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought" ${i.bought ? "checked" : ""} aria-label="${isHome(i) ? "Separado" : "Comprado"}: ${esc(i.name)}">
+      ${tick("ingredients", i.id, "bought", i.bought, (isHome(i) ? "Separado: " : "Comprado: ") + i.name)}
       <button class="imain" data-act="open" data-key="${i.id}" aria-expanded="${open}">
         <span class="iname2">${esc(i.name)}</span><span class="iqty2">${esc(fmtQty(e.qty, i.unit))}</span>
         <span class="isub">${esc(i.buy_hint)}</span>
@@ -421,7 +465,7 @@
     ${kinds.map(k => {
       const list = S.pendencias.filter(p => p.kind === k).sort((a, b) => (a.done - b.done) || byPos(a, b));
       return `<h2>${esc(k)} <small>${list.filter(p => p.done).length}/${list.length}</small></h2><ul class="pend">${list.map(p => `<li class="${p.done ? "done" : ""}">
-        <input type="checkbox" class="big" data-act="set" data-t="pendencias" data-id="${p.id}" data-f="done" ${p.done ? "checked" : ""} aria-label="Resolvido: ${esc(p.subject)}">
+        ${tick("pendencias", p.id, "done", p.done, "Resolvido: " + p.subject)}
         <div><strong>${esc(p.subject)}</strong><p>${esc(p.detail)}</p>
           ${area("pendencias", p.id, "answer", p.answer, k === "Dúvida" ? "Resposta" : "Comentário")}
           <button class="ghost" data-act="del" data-t="pendencias" data-id="${p.id}" data-confirm="Excluir esta pendência?">Excluir</button></div></li>`).join("")}</ul>`;
@@ -439,7 +483,7 @@
       <label class="fld">Pessoa ${sel("tWho", whoOpts())}</label>
       <label class="fld">Situação ${sel("tStatus", [["", "Tudo"], ["todo", "Falta separar"], ["done", "Já separado"]])}</label>
     </div>
-    ${groupList(shown, "origin", tot) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada na lista ainda."}</p>`}
+    ${groupList(shown, "origin", tot, "h2", "take") || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada na lista ainda."}</p>`}
     <form class="newrow" data-form="add-extra"><input name="item" placeholder="Adicionar item de uso geral" required><button class="btn">Adicionar</button></form>
     <p class="hint">Marcar "Precisa comprar" manda o item para a aba Compras. Os itens de cada atividade são criados na aba Entretenimento, e os suprimentos da casa, na aba Casa.</p>`;
   }
@@ -464,7 +508,7 @@
       const open = ui.open.has(a.id), items = S.extras.filter(e => e.activity_id === a.id).sort(byPos);
       const meta = items.length ? `${items.filter(e => e.done).length} de ${items.length} ${items.length === 1 ? "item resolvido" : "itens resolvidos"}` : "sem itens";
       return `<article class="recipe ${open ? "open" : ""}">
-        <button class="rhead" data-act="open" data-key="${a.id}" aria-expanded="${open}"><span class="rname">${esc(a.name)}</span><span class="rmeta">${meta}</span></button>
+        <button class="rhead chev" data-act="open" data-key="${a.id}" aria-expanded="${open}"><span><span class="rname">${esc(a.name)}</span><span class="rmeta">${meta}</span></span></button>
         ${open ? `<div class="rbody">
           <label class="fld">Nome${inp("activities", a.id, "name", a.name)}</label>
           <label class="fld">Como funciona${area("activities", a.id, "notes", a.notes, "Regras, quem organiza, quando")}</label>
@@ -478,7 +522,7 @@
 
   function vMine() {
     const names = peopleNames();
-    const me = ui.me || names.find(n => norm(n) === norm(who)) || who || names[0] || "";
+    const me = meName();
     const opts = names.some(n => norm(n) === norm(me)) || !me ? names : names.concat(me);
     const people = `<h2>Pessoas do grupo</h2>
       <p class="hint">São os nomes que aparecem nas opções de responsável.</p>
@@ -498,15 +542,20 @@
     </div>
     <p class="hint">Tudo em que ${esc(me)} aparece como responsável, incluindo o que está marcado para todos.${paid ? ` Valor pago nestes itens: R$ ${money.format(paid)}.` : ""}</p>
     <h2 class="sec">Comprar ${cnt(buyAll)}</h2>
-    ${groupList(buy, "sector", tot, "h3") || `<p class="empty">${buyAll.length ? "Nenhuma compra com esses filtros." : "Nenhuma compra. Defina os responsáveis na aba Compras."}</p>`}
+    ${groupList(buy, "sector", tot, "h3", "mb") || `<p class="empty">${buyAll.length ? "Nenhuma compra com esses filtros." : "Nenhuma compra. Defina os responsáveis na aba Compras."}</p>`}
     <h2 class="sec">Levar ${cnt(takeAll)}</h2>
-    ${groupList(take, "origin", tot, "h3") || `<p class="empty">${takeAll.length ? "Nenhum item com esses filtros." : "Nenhum item para levar. Defina os responsáveis na aba Levar."}</p>`}
+    ${groupList(take, "origin", tot, "h3", "mt") || `<p class="empty">${takeAll.length ? "Nenhum item com esses filtros." : "Nenhum item para levar. Defina os responsáveis na aba Levar."}</p>`}
     ${people}`;
   }
 
   function filterShop() {
     const k = norm(ui.q);
-    view.querySelectorAll(".shop > li[data-name]").forEach(li => { li.hidden = !!k && !li.dataset.name.includes(k); });
+    view.querySelectorAll("section.grp").forEach(sec => {
+      const ul = sec.querySelector("ul"); let hit = 0;
+      ul.querySelectorAll(":scope > li[data-name]").forEach(li => { li.hidden = !!k && !li.dataset.name.includes(k); if (!li.hidden) hit++; });
+      ul.hidden = k ? false : ul.dataset.closed === "1";
+      sec.hidden = !!k && !hit;
+    });
   }
 
   /* ---------- ações ---------- */
@@ -575,9 +624,10 @@
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "open-recipe") { ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
     else if (act === "del") { if (!el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
+    else if (act === "weekly") { const r = get("recipes", el.dataset.id), on = el.dataset.v === "1"; if (r) { toast(on ? `${r.name} entrou na semana toda.` : `${r.name} virou ideia e saiu das compras.`); update("recipes", r.id, { weekly: on }, true); } }
     else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
     else if (act === "ui-set") { ui[el.dataset.f] = el.dataset.v; if (el.dataset.f === "menuView") localStorage.setItem("an-menu-view", el.dataset.v); render(true); }
-    else if (act === "goto-day") { ui.menuView = "list"; localStorage.setItem("an-menu-view", "list"); render(true); const n = document.getElementById("d-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
+    else if (act === "goto-day") { ui.open.add("d-" + el.dataset.id); ui.menuView = "list"; localStorage.setItem("an-menu-view", "list"); render(true); const n = document.getElementById("d-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
     else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ""; render(true); }
     else if (act === "logout") { client.auth.signOut().then(() => location.reload()); }
   });
@@ -605,11 +655,14 @@
       add("people", { id: uid(), name, pos: nextPos("people") });
     }
   });
-  $("#tabs").addEventListener("click", e => {
-    const b = e.target.closest("button"); if (!b) return;
-    ui.tab = b.dataset.tab; localStorage.setItem("an-tab", ui.tab);
+  function go(t) {
+    if (t === "plano") t = localStorage.getItem("an-plano") || "menu";
+    if (!TABS.includes(t)) t = "menu";
+    ui.tab = t; localStorage.setItem("an-tab", t);
+    if (SEC[t] === "plano") localStorage.setItem("an-plano", t);
     [...ui.open].filter(k => k.startsWith("own-")).forEach(k => ui.open.delete(k)); render(true); window.scrollTo(0, 0);
-  });
+  }
+  for (const id of ["#tabs", "#sub"]) $(id).addEventListener("click", e => { const b = e.target.closest("button"); if (b) go(b.dataset.tab); });
 
   /* ---------- início ---------- */
   async function start() {
