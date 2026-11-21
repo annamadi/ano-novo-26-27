@@ -13,9 +13,9 @@
     "Fresco / repor lá", "A confirmar", "Alguém leva pronto", "Compra à parte"];
 
   const S = Object.fromEntries(TABLES.map(t => [t, []]));
-  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", hideDone: false, q: "", me: "" };
+  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", q: "", me: "" };
   if (!TABS.includes(ui.tab)) ui.tab = "menu";
-  let client = null, renderPending = false, needsSetup = false;
+  let client = null, renderPending = false, needsSetup = false, revMap = new Map();
 
   const $ = s => document.querySelector(s);
   const view = $("#view");
@@ -67,6 +67,7 @@
         else if (OPTIONAL.has(t)) { needsSetup = true; S[t] = []; }
         else throw r.error;
       });
+      if (S.recipes[0] && !("reviewed" in S.recipes[0])) needsSetup = true;
       client.channel("an-all").on("postgres_changes", { event: "*", schema: "public" }, p => {
         const t = p.table.startsWith(PREFIX) ? p.table.slice(PREFIX.length) : null;
         if (!t || !S[t]) return;
@@ -112,6 +113,16 @@
     }
     return tot;
   }
+  // ingrediente -> receitas do cardápio que usam ele e ainda não foram revisadas
+  function unreviewed() {
+    const m = new Map();
+    for (const it of S.recipe_items) {
+      const r = get("recipes", it.recipe_id);
+      if (!r || r.reviewed || !recipeCount(r)) continue;
+      const l = m.get(it.ingredient_id) || []; if (!l.includes(r.name)) l.push(r.name); m.set(it.ingredient_id, l);
+    }
+    return m;
+  }
   function fmtQty(q, u) {
     if (!q) return "a definir";
     if (u === "g" && q >= 1000) return nf.format(q / 1000) + " kg";
@@ -127,7 +138,8 @@
     renderPending = false;
     document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY;
-    view.innerHTML = (needsSetup ? `<p class="warn">As abas Levar, Entretenimento e Minha lista só salvam depois que o banco for atualizado (arquivo supabase/migration-02.sql).</p>` : "") +
+    revMap = unreviewed();
+    view.innerHTML = (needsSetup ? `<p class="warn">As abas Levar, Entretenimento e Minha lista e as novidades de revisão e local de compra só salvam depois que o banco for atualizado (arquivo supabase/migration-02.sql).</p>` : "") +
       ({ menu: vMenu, recipes: vRecipes, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
     window.scrollTo(0, y);
     const tot = shopping(); let done = 0;
@@ -137,6 +149,7 @@
     if (ui.tab === "shop" && ui.q) filterShop();
   }
   const datalists = () => `<datalist id="dl-ings">${S.ingredients.map(i => `<option value="${esc(i.name)}">`).join("")}</datalist>
+    <datalist id="dl-stores">${[...new Set(S.ingredients.map(i => i.store).filter(Boolean))].sort().map(o => `<option value="${esc(o)}">`).join("")}</datalist>
     <datalist id="dl-sectors">${[...new Set(S.ingredients.map(i => i.sector).filter(Boolean))].sort().map(o => `<option value="${esc(o)}">`).join("")}</datalist>`;
 
   const inp = (t, id, f, val, extra = "") => `<input data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" value="${esc(val)}" ${extra}>`;
@@ -163,7 +176,7 @@
       <input type="checkbox" class="big" data-act="set" data-t="extras" data-id="${e.id}" data-f="done" ${e.done ? "checked" : ""} aria-label="Resolvido: ${esc(e.item)}">
       ${inp("extras", e.id, "item", e.item, 'aria-label="Item"')}
       <button class="x" data-act="del" data-t="extras" data-id="${e.id}" aria-label="Excluir ${esc(e.item)}">×</button>
-      <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}${a ? `<span class="tag">${esc(a.name)}</span>` : ""}</div>
+      <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}${ui.tab === "mine" ? `<span class="tag ${e.buy ? "buy" : "home"}">${e.buy ? "comprar" : "levar"}</span>` : ""}${a ? `<span class="tag">${esc(a.name)}</span>` : ""}</div>
       ${pickPanel("extras", e.id, e.owner)}
     </li>`;
   }
@@ -210,7 +223,9 @@
 
   function vRecipes() {
     const blocks = BLOCKS.concat([...new Set(S.recipes.map(r => r.block))].filter(b => !BLOCKS.includes(b)));
-    return `<form class="newrow" data-form="new-recipe">
+    const active = S.recipes.filter(r => recipeCount(r));
+    return `<p class="lead">${active.filter(r => r.reviewed).length} de ${active.length} receitas do cardápio revisadas. Enquanto uma receita não for revisada, os ingredientes dela ficam com aviso na lista de compras.</p>
+    <form class="newrow" data-form="new-recipe">
       <input name="name" placeholder="Nome da receita nova" required>
       <select name="block" aria-label="Tipo">${BLOCKS.map(b => `<option>${b}</option>`).join("")}</select>
       <button class="btn primary">Criar receita</button></form>
@@ -224,6 +239,9 @@
     const items = S.recipe_items.filter(i => i.recipe_id === r.id).sort(byPos);
     let body = "";
     if (open) body = `<div class="rbody">
+      <div class="review ${r.reviewed ? "ok" : ""}">${r.reviewed
+        ? `<span>Revisada${r.reviewed_by ? " por " + esc(r.reviewed_by) : ""}. Ingredientes e quantidades confirmados.</span><button class="ghost" data-act="review" data-id="${r.id}" data-v="0">Desfazer</button>`
+        : `<span>Confira ingredientes e quantidades antes de alguém comprar.</span><button class="btn primary" data-act="review" data-id="${r.id}" data-v="1">Marcar como revisada</button>`}</div>
       <div class="grid2">
         <label class="fld">Nome${inp("recipes", r.id, "name", r.name)}</label>
         <label class="fld">Tipo<select data-act="set" data-t="recipes" data-id="${r.id}" data-f="block">${[...new Set(BLOCKS.concat(r.block))].map(b => `<option ${b === r.block ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></label>
@@ -239,7 +257,7 @@
           <span class="unit">${esc(g.unit)}</span>
           <button class="ghost" data-act="open" data-key="${it.id}" aria-expanded="${more}">${more ? "Menos" : "Mais"}</button>
           <button class="x" data-act="del" data-t="recipe_items" data-id="${it.id}" aria-label="Tirar ${esc(g.name)}">×</button>
-          <div class="tags">${it.suggested ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "nao" ? `<span class="tag nov">não é vegetariano</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}${it.note && !more ? `<span class="note">${esc(it.note)}</span>` : ""}</div>
+          <div class="tags">${it.suggested && !r.reviewed ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "nao" ? `<span class="tag nov">não é vegetariano</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}${it.note && !more ? `<span class="note">${esc(it.note)}</span>` : ""}</div>
           ${more ? `<div class="more">
             <label class="fld">Observação${inp("recipe_items", it.id, "note", it.note)}</label>
             <label class="fld">Vegetariano?<select data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="veg">
@@ -260,43 +278,55 @@
     return `<article class="recipe ${open ? "open" : ""}" id="r-${r.id}">
       <button class="rhead" data-act="open" data-key="${r.id}" aria-expanded="${open}">
         <span class="rname">${esc(r.name)}</span>
-        <span class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)} / ${items.length} ${items.length === 1 ? "item" : "itens"}</span>
+        <span class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)} / ${items.length} ${items.length === 1 ? "item" : "itens"}${st.idea ? "" : r.reviewed ? ` / <b class="rok">revisada</b>` : ` / <b class="rtodo">a revisar</b>`}</span>
       </button>${body}</article>`;
   }
 
+  const GROUPS = { when_buy: "Quando comprar", sector: "Categoria", store: "Local de compra", owner: "Responsável" };
+  const NONE = { when_buy: "Sem data definida", sector: "Sem categoria", store: "Sem local definido", owner: "Sem responsável" };
   function vShop() {
     const tot = shopping();
     const used = S.ingredients.filter(i => tot.has(i.id));
     const unused = S.ingredients.filter(i => !tot.has(i.id)).sort((a, b) => a.name.localeCompare(b.name, "pt"));
-    const keyOf = i => ui.group === "owner" ? (i.owner || "Sem responsável") : (i[ui.group] || "Sem grupo");
+    const okWho = o => !ui.fWho || (ui.fWho === "-" ? !o : isMine(o, ui.fWho));
+    const pass = i => okWho(i.owner)
+      && (!ui.fStatus || (ui.fStatus === "todo" ? !(i.bought || i.from_home) : ui.fStatus === "bought" ? i.bought : i.from_home))
+      && (!ui.fRev || (ui.fRev === "ok" ? !revMap.has(i.id) : revMap.has(i.id)));
+    const shown = used.filter(pass);
+    const keyOf = i => i[ui.group] || NONE[ui.group];
     const groups = new Map();
-    used.forEach(i => { const k = keyOf(i); (groups.get(k) || groups.set(k, []).get(k)).push(i); });
-    const order = [...groups.keys()].sort((a, b) => ui.group === "when_buy" ? ((WHEN.indexOf(a) + 99) % 99) - ((WHEN.indexOf(b) + 99) % 99) : a.localeCompare(b, "pt"));
+    shown.forEach(i => { const k = keyOf(i); (groups.get(k) || groups.set(k, []).get(k)).push(i); });
+    const order = [...groups.keys()].sort((a, b) => ui.group === "when_buy" ? ((WHEN.indexOf(a) + 99) % 99) - ((WHEN.indexOf(b) + 99) % 99) : (a === NONE[ui.group]) - (b === NONE[ui.group]) || a.localeCompare(b, "pt"));
+    const other = S.extras.filter(e => e.buy && okWho(e.owner) && (!ui.fStatus || (ui.fStatus === "todo" ? !e.done : ui.fStatus === "bought" ? e.done : false)) && !ui.fRev).sort(byPos);
+    const sel = (f, opts) => `<select data-act="ui" data-f="${f}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${ui[f] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+    const filtered = ui.fWho || ui.fStatus || ui.fRev;
     return `<div class="shopbar">
       <input type="search" id="shop-q" placeholder="Buscar item" value="${esc(ui.q)}" aria-label="Buscar item">
-      <label class="fld inline">Agrupar por <select data-act="ui" data-f="group">
-        <option value="when_buy" ${ui.group === "when_buy" ? "selected" : ""}>Quando comprar</option>
-        <option value="sector" ${ui.group === "sector" ? "selected" : ""}>Setor do mercado</option>
-        <option value="owner" ${ui.group === "owner" ? "selected" : ""}>Responsável</option></select></label>
-      <label class="chk"><input type="checkbox" data-act="ui" data-f="hideDone" ${ui.hideDone ? "checked" : ""}><span>Esconder resolvidos</span></label>
+      <label class="fld">Agrupar por ${sel("group", Object.entries(GROUPS))}</label>
+      <label class="fld">Pessoa ${sel("fWho", [["", "Todas"], ...peopleNames().map(n => [n, n]), ["-", "Sem responsável"]])}</label>
+      <label class="fld">Situação ${sel("fStatus", [["", "Tudo"], ["todo", "Falta resolver"], ["bought", "Já comprado"], ["home", "Vem de casa"]])}</label>
+      <label class="fld">Revisão ${sel("fRev", [["", "Tudo"], ["ok", "Receitas revisadas"], ["todo", "Receita a revisar"]])}</label>
     </div>
+    ${filtered ? `<p class="hint">Mostrando ${shown.length} de ${used.length} itens. <button class="ghost" data-act="clear-filters">Limpar filtros</button></p>` : ""}
     ${order.map(k => {
-      const list = groups.get(k).filter(i => !(ui.hideDone && (i.bought || i.from_home))).sort((a, b) => a.name.localeCompare(b.name, "pt"));
-      const all = groups.get(k), ok = all.filter(i => i.bought || i.from_home).length;
-      return list.length ? `<h2>${esc(k)} <small>${ok}/${all.length}</small></h2><ul class="shop">${list.map(i => vItem(i, tot.get(i.id))).join("")}</ul>` : "";
-    }).join("") || `<p class="empty">Nada para comprar: o cardápio está vazio.</p>`}
+      const list = groups.get(k).sort((a, b) => a.name.localeCompare(b.name, "pt"));
+      return `<h2>${esc(k)} <small>${list.filter(i => i.bought || i.from_home).length}/${list.length}</small></h2><ul class="shop">${list.map(i => vItem(i, tot.get(i.id))).join("")}</ul>`;
+    }).join("") || `<p class="empty">${used.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
+    ${other.length ? `<h2>Compras que não são comida <small>${other.filter(e => e.done).length}/${other.length}</small></h2>
+      <p class="hint">Itens das abas Levar e Entretenimento marcados com "Precisa comprar".</p>
+      <ul class="xlist">${other.map(e => xRow(e, true)).join("")}</ul>` : ""}
     ${unused.length ? `<details class="unused"><summary>Fora do cardápio (${unused.length})</summary>
       <p class="hint">Ingredientes que nenhuma receita ativa usa. As marcações ficam guardadas caso voltem.</p>
       <ul class="plain">${unused.map(i => `<li><span>${esc(i.name)}</span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}" data-confirm="Excluir ${esc(i.name)} de vez, inclusive das receitas guardadas?">Excluir</button></li>`).join("")}</ul></details>` : ""}`;
   }
   function vItem(i, e) {
-    const open = ui.open.has(i.id), done = i.bought || i.from_home;
+    const open = ui.open.has(i.id), done = i.bought || i.from_home, pend = revMap.get(i.id);
     return `<li class="item ${done ? "done" : ""}" data-name="${esc(norm(i.name))}">
       <input type="checkbox" class="big" data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought" ${i.bought ? "checked" : ""} aria-label="Comprado: ${esc(i.name)}">
       <button class="imain" data-act="open" data-key="${i.id}" aria-expanded="${open}">
         <span class="iname2">${esc(i.name)}</span><span class="iqty2">${esc(fmtQty(e.qty, i.unit))}</span>
         <span class="isub">${esc(i.buy_hint)}</span>
-        <span class="chips">${i.from_home ? `<span class="tag home">vem de casa</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}</span>
+        <span class="chips">${i.from_home ? `<span class="tag home">vem de casa</span>` : ui.tab === "mine" ? `<span class="tag buy">comprar</span>` : ""}${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}</span>
       </button>
       ${open ? `<div class="ibody">
         <div class="grid2">
@@ -305,10 +335,12 @@
           <label class="fld">Como comprar (embalagem)${inp("ingredients", i.id, "buy_hint", i.buy_hint)}</label>
           <div class="fld">Responsável<div class="pickwrap">${pickBtn(i.id, i.owner)}</div>${pickPanel("ingredients", i.id, i.owner)}</div>
           <label class="fld">Quando comprar<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="when_buy">${[...new Set(WHEN.concat(i.when_buy || []))].map(w => `<option ${w === i.when_buy ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>
-          <label class="fld">Setor${inp("ingredients", i.id, "sector", i.sector, 'list="dl-sectors"')}</label>
+          <label class="fld">Categoria${inp("ingredients", i.id, "sector", i.sector, 'list="dl-sectors"')}</label>
+          <label class="fld">Local de compra${inp("ingredients", i.id, "store", i.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
         </div>
         ${chk("ingredients", i.id, "from_home", i.from_home, "Vem de casa (alguém leva, não precisa comprar)")}
         <label class="fld">Observação${area("ingredients", i.id, "note", i.note, "Marca, tipo, onde achar")}</label>
+        ${pend ? `<p class="uses todo">Falta revisar: ${pend.map(esc).join(", ")}. Confirme a receita antes de comprar.</p>` : ""}
         <p class="uses">Usado em: ${e.uses.map(u => `${esc(u.name)} (${esc(fmtQty(u.qty, i.unit))}${u.times > 1 ? " × " + u.times : ""})`).join("; ")}</p>
       </div>` : (i.note ? `<p class="inote">${esc(i.note)}</p>` : "")}
     </li>`;
@@ -334,9 +366,9 @@
     const acts = [...S.activities].sort(byPos).map(a => [a, S.extras.filter(e => e.activity_id === a.id).sort(byPos)]).filter(([, l]) => l.length);
     const cnt = l => `<small>${l.filter(e => e.done).length}/${l.length}</small>`;
     return `<p class="lead">O que o grupo precisa levar ou comprar além da comida. Marque quando estiver separado ou comprado.</p>
-    <h2>Levar ${cnt(plain)}</h2>
+    <h2>Itens de uso geral ${cnt(plain)}</h2>
     <ul class="xlist">${plain.map(e => xRow(e)).join("") || `<li class="empty">Nada na lista ainda.</li>`}</ul>
-    <form class="newrow" data-form="add-extra"><input name="item" placeholder="Adicionar item para levar" required><button class="btn">Adicionar</button></form>
+    <form class="newrow" data-form="add-extra"><input name="item" placeholder="Adicionar item de uso geral" required><button class="btn">Adicionar</button></form>
     <h2>Entretenimento ${cnt(acts.flatMap(([, l]) => l))}</h2>
     <p class="hint">Vem do que cada atividade precisa. Para incluir itens, abra a atividade na aba Entretenimento.</p>
     ${acts.map(([a, l]) => `<h3>${esc(a.name)}</h3><ul class="xlist">${l.map(e => xRow(e)).join("")}</ul>`).join("") || `<p class="empty">Nenhuma atividade tem itens ainda.</p>`}`;
@@ -377,7 +409,7 @@
     <p class="hint">Tudo em que ${esc(me)} aparece como responsável, incluindo o que está marcado para todos.</p>
     <h2>Comida e compras <small>${food.filter(i => i.bought || i.from_home).length}/${food.length}</small></h2>
     ${food.length ? `<ul class="shop">${food.map(i => vItem(i, tot.get(i.id))).join("")}</ul>` : `<p class="empty">Nenhum item de compra. Defina os responsáveis na aba Compras.</p>`}
-    <h2>Coisas para levar <small>${things.filter(e => e.done).length}/${things.length}</small></h2>
+    <h2>Coisas para comprar ou levar <small>${things.filter(e => e.done).length}/${things.length}</small></h2>
     ${things.length ? `<ul class="xlist">${things.map(e => xRow(e, true)).join("")}</ul>` : `<p class="empty">Nenhum item para levar. Defina os responsáveis nas abas Levar e Entretenimento.</p>`}
     ${people}`;
   }
@@ -391,7 +423,7 @@
   const num = v => { const n = parseFloat(String(v).replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
   function ensureIngredient(name, unit) {
     const found = findIng(name); if (found) return found;
-    const ing = { id: uid(), name: name.trim(), unit: (unit || "un").trim() || "un", sector: "Mercado", when_buy: "Semana da viagem (até 26/12)", buy_hint: "", bought: false, from_home: false, owner: "", note: "" };
+    const ing = { id: uid(), name: name.trim(), unit: (unit || "un").trim() || "un", store: "", sector: "Mercado", when_buy: "Semana da viagem (até 26/12)", buy_hint: "", bought: false, from_home: false, owner: "", note: "" };
     S.ingredients.push(ing); persist("ingredients", ing);
     toast(`Ingrediente novo criado: ${ing.name}.`);
     return ing;
@@ -451,6 +483,8 @@
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "open-recipe") { ui.tab = "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
     else if (act === "del") { if (!el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
+    else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
+    else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ""; render(true); }
     else if (act === "logout") { client.auth.signOut().then(() => location.reload()); }
   });
   view.addEventListener("submit", e => {
@@ -460,7 +494,7 @@
       const ing = ensureIngredient(v("name"), v("unit"));
       add("recipe_items", { id: uid(), recipe_id: f.dataset.id, ingredient_id: ing.id, qty: num(v("qty")), suggested: false, veg: "", note: "", pos: nextPos("recipe_items") });
     } else if (kind === "new-recipe") {
-      const r = { id: uid(), name: v("name"), block: v("block"), serves: "", weekly: false, notes: "", prep: "", pos: nextPos("recipes") };
+      const r = { id: uid(), name: v("name"), block: v("block"), reviewed: false, reviewed_by: "", serves: "", weekly: false, notes: "", prep: "", pos: nextPos("recipes") };
       ui.open.add(r.id); add("recipes", r);
       toast("Receita criada como ideia. Coloque num dia do cardápio para contar nas compras.");
       const n = document.getElementById("r-" + r.id); if (n) n.scrollIntoView({ block: "center" });

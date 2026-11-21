@@ -126,6 +126,7 @@ input.big { width: 28px; height: 28px; }
 /* compras */
 .shopbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 8px 0; }
 .shopbar input[type=search] { flex: 1 1 100%; }
+.shopbar .fld { flex: 1 1 150px; margin: 0; }
 .shop, .pend { list-style: none; margin: 0; padding: 0; }
 .item { display: grid; grid-template-columns: 28px 1fr; gap: 0 12px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .item > input.big { margin-top: 8px; }
@@ -161,6 +162,11 @@ h3 { font: 700 1rem var(--body); margin: 18px 0 2px; color: var(--pool-deep); }
 .pickpanel { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 0 18px; align-items: center; background: var(--water); border-radius: 12px; padding: 6px 12px; margin-top: 6px; font-weight: 400; color: var(--ink); font-size: 1rem; }
 .ibody .pickpanel { background: #fff; }
 .pickpanel .hint { flex: 1 1 100%; }
+.tag.buy { background: #FFE3D3; color: #8A3A0C; }
+.review { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; background: #FFF1C9; color: #6B4E00; border-radius: 12px; padding: 8px 12px; margin-top: 12px; font-size: .92rem; }
+.review.ok { background: var(--leaf-bg); color: #1F6E49; }
+.rok { color: #1F6E49; } .rtodo { color: #9A6B00; }
+.uses.todo { color: #6B4E00; font-weight: 600; }
 .warn { background: #FFF1C9; color: #6B4E00; border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; font-weight: 500; }
 
 .login { min-height: 100dvh; display: grid; place-items: center; background: var(--pool); padding: 16px; }

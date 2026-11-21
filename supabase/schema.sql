@@ -11,7 +11,8 @@ create table if not exists an_ingredients (
   bought boolean not null default false,
   from_home boolean not null default false,
   owner text not null default '',
-  note text not null default ''
+  note text not null default '',
+  store text not null default ''
 );
 
 create table if not exists an_recipes (
@@ -22,6 +23,8 @@ create table if not exists an_recipes (
   weekly boolean not null default false,
   notes text not null default '',
   prep text not null default '',
+  reviewed boolean not null default false,
+  reviewed_by text not null default '',
   pos double precision not null default 0
 );
 

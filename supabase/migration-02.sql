@@ -1,5 +1,6 @@
 -- Atualização 02: pessoas do grupo, atividades de entretenimento com itens,
--- e marcação "precisa comprar" nos itens para levar.
+-- marcação "precisa comprar" nos itens para levar, local de compra dos
+-- ingredientes e receita revisada.
 -- Pode ser rodado mais de uma vez sem estragar nada.
 
 create table if not exists an_people (
@@ -15,6 +16,9 @@ create table if not exists an_activities (
   pos double precision not null default 0
 );
 
+alter table an_ingredients add column if not exists store text not null default '';
+alter table an_recipes add column if not exists reviewed boolean not null default false;
+alter table an_recipes add column if not exists reviewed_by text not null default '';
 alter table an_extras add column if not exists buy boolean not null default false;
 alter table an_extras add column if not exists activity_id uuid references an_activities(id) on delete cascade;
 
