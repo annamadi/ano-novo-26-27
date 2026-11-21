@@ -18,7 +18,7 @@
   const SEC_OLD = { "Mercado": "Mercearia", "Açougue / Peixaria": "Açougue e peixaria", "Casa": "Casa e descartáveis", "Feira": "Hortifruti" };
   const whenOf = i => WHEN_OLD[i.when_buy] || i.when_buy || "";
   const secOf = i => SEC_OLD[i.sector] || i.sector || "";
-  const isFreeze = i => !!i.freeze || i.when_buy === "Antecipado, se congelar";
+  const isFreeze = i => !!i.can_freeze || i.when_buy === "Antecipado, se congelar";
   const SECTORS = ["Mercearia", "Hortifruti", "Frios e laticínios", "Açougue e peixaria", "Padaria", "Bebidas", "Congelados", "Casa e descartáveis"];
 
   const HOME = "Alguém leva pronto";
@@ -106,7 +106,7 @@
         else if (OPTIONAL.has(t)) { needsSetup = true; S[t] = []; if (t === "trash") noTrash = true; }
         else throw r.error;
       });
-      if ((S.recipes[0] && !("reviewed" in S.recipes[0])) || (S.ingredients[0] && !("paid" in S.ingredients[0])) || (S.extras[0] && !("store" in S.extras[0])) || (S.ingredients[0] && !("bought_by" in S.ingredients[0])) || (S.ingredients[0] && !("freeze" in S.ingredients[0]))) needsSetup = true;
+      if ((S.recipes[0] && !("reviewed" in S.recipes[0])) || (S.ingredients[0] && !("paid" in S.ingredients[0])) || (S.extras[0] && !("store" in S.extras[0])) || (S.ingredients[0] && !("bought_by" in S.ingredients[0])) || (S.ingredients[0] && !("can_freeze" in S.ingredients[0]))) needsSetup = true;
       client.channel("an-all").on("postgres_changes", { event: "*", schema: "public" }, p => {
         const t = p.table.startsWith(PREFIX) ? p.table.slice(PREFIX.length) : null;
         if (!t || !S[t]) return;
@@ -504,12 +504,13 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   }
   function vItem(i, e, g) {
     const open = ui.open.has(i.id), done = i.bought, pend = revMap.get(i.id);
+    const hintDup = (() => { const m = norm(i.buy_hint).replace(/^~\s*/, "").match(/^([\d.,]+)\s*([a-zç]*)$/); if (!m) return false; const f = norm(fmtQty(e.qty, i.unit)).match(/^([\d.,]+)\s*(.*)$/); return !!f && num(m[1]) === num(f[1]) && (!m[2] || m[2].slice(0, 3) === f[2].slice(0, 3)); })();
     const stale = !!i.buy_hint && i.hint_qty != null && Math.abs(Number(i.hint_qty) - e.qty) > 1e-6;
     return `<li class="item ${done ? "done" : ""}" data-name="${esc(norm(i.name))}">
       ${tick("ingredients", i.id, "bought", i.bought, (isHome(i) ? "Separado: " : "Comprado: ") + i.name)}
       <button class="imain" data-act="open" data-key="${i.id}" aria-expanded="${open}">
         <span class="iname2">${esc(i.name)}</span><span class="iqty2">${esc(fmtQty(e.qty, i.unit))}</span>
-        <span class="isub">${stale ? "" : esc(i.buy_hint)}</span>
+        <span class="isub">${stale || hintDup ? "" : esc(i.buy_hint)}</span>
         <span class="chips">${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${g !== "sector" && secOf(i) ? `<span class="tag">${esc(secOf(i))}</span>` : ""}${g !== "when_buy" && whenOf(i) && !isHome(i) ? `<span class="tag">${esc(whenOf(i))}</span>` : ""}${isFreeze(i) && !isHome(i) ? `<span class="tag">congelar</span>` : ""}${g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}${i.bought && i.bought_by ? `<span class="tag ok">pago por ${esc(i.bought_by)}</span>` : ""}</span>
       </button>
       ${open ? `<div class="ibody">
@@ -524,7 +525,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           ${isHome(i) || !hasCol("ingredients", "bought_by") ? "" : `<label class="fld">Quem pagou<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought_by">${payOpts(i.bought_by)}</select></label>`}
           <label class="fld">Loja${inp("ingredients", i.id, "store", i.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
         </div>
-        ${isHome(i) || !hasCol("ingredients", "freeze") ? "" : chk("ingredients", i.id, "freeze", isFreeze(i), "Dá para comprar antes e congelar")}
+        ${isHome(i) || !hasCol("ingredients", "can_freeze") ? "" : chk("ingredients", i.id, "can_freeze", isFreeze(i), "Dá para comprar antes e congelar")}
         ${chk("ingredients", i.id, "from_home", isHome(i), "Vem de casa (alguém leva, não precisa comprar; vai para a aba Levar)")}
         <label class="fld">Observação${area("ingredients", i.id, "note", i.note, "Marca, tipo, onde achar")}</label>
         ${pend ? `<p class="uses todo">Falta revisar: ${pend.map(esc).join(", ")}. Confirme a receita antes de comprar.</p>` : ""}
