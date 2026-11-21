@@ -162,6 +162,13 @@ h3 { font: 700 1rem var(--body); margin: 18px 0 2px; color: var(--pool-deep); }
 .pickpanel { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 0 18px; align-items: center; background: var(--water); border-radius: 12px; padding: 6px 12px; margin-top: 6px; font-weight: 400; color: var(--ink); font-size: 1rem; }
 .ibody .pickpanel { background: #fff; }
 .pickpanel .hint { flex: 1 1 100%; }
+.tag.when { background: #EDE7FF; color: #45308A; }
+h3.grp { display: flex; align-items: baseline; gap: 8px; margin-top: 18px; }
+h3 small { font: 600 .82rem var(--body); color: var(--muted); }
+h2.sec { border-top: 3px solid var(--pool); padding-top: 14px; margin-top: 34px; font-size: 1.6rem; }
+.paid { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; font-weight: 600; color: var(--muted); }
+.paid input { width: 92px; min-height: 36px; padding: 4px 8px; }
+.warn .ghost { padding: 0 4px; min-height: 30px; }
 .tag.buy { background: #FFE3D3; color: #8A3A0C; }
 .review { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between; background: #FFF1C9; color: #6B4E00; border-radius: 12px; padding: 8px 12px; margin-top: 12px; font-size: .92rem; }
 .review.ok { background: var(--leaf-bg); color: #1F6E49; }

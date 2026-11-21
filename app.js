@@ -13,7 +13,7 @@
     "Fresco / repor lá", "A confirmar", "Alguém leva pronto", "Compra à parte"];
 
   const S = Object.fromEntries(TABLES.map(t => [t, []]));
-  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", q: "", me: "" };
+  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", tWho: "", tStatus: "", mStatus: "", mSector: "", q: "", me: "" };
   if (!TABS.includes(ui.tab)) ui.tab = "menu";
   let client = null, renderPending = false, needsSetup = false, revMap = new Map();
 
@@ -67,7 +67,7 @@
         else if (OPTIONAL.has(t)) { needsSetup = true; S[t] = []; }
         else throw r.error;
       });
-      if (S.recipes[0] && !("reviewed" in S.recipes[0])) needsSetup = true;
+      if ((S.recipes[0] && !("reviewed" in S.recipes[0])) || (S.ingredients[0] && !("paid" in S.ingredients[0]))) needsSetup = true;
       client.channel("an-all").on("postgres_changes", { event: "*", schema: "public" }, p => {
         const t = p.table.startsWith(PREFIX) ? p.table.slice(PREFIX.length) : null;
         if (!t || !S[t]) return;
@@ -139,12 +139,11 @@
     document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY;
     revMap = unreviewed();
-    view.innerHTML = (needsSetup ? `<p class="warn">As abas Levar, Entretenimento e Minha lista e as novidades de revisão e local de compra só salvam depois que o banco for atualizado (arquivo supabase/migration-02.sql).</p>` : "") +
+    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-03.sql).</p>` : "") +
       ({ menu: vMenu, recipes: vRecipes, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
     window.scrollTo(0, y);
-    const tot = shopping(); let done = 0;
-    tot.forEach((_, id) => { const i = get("ingredients", id); if (i && (i.bought || i.from_home)) done++; });
-    $("#status").innerHTML = `${done} de ${tot.size} itens de compra resolvidos` +
+    const be = buyEntries(shopping());
+    $("#status").innerHTML = `${be.filter(isDone).length} de ${be.length} itens comprados` +
       (client ? ` <span class="who">${esc(who)}</span> <button class="link" data-act="logout">Sair</button>` : ` <span class="local">modo local: os dados ficam só neste navegador</span>`);
     if (ui.tab === "shop" && ui.q) filterShop();
   }
@@ -170,16 +169,59 @@
       ${names.length ? "" : `<p class="hint">Cadastre as pessoas do grupo na aba Minha lista.</p>`}
       <button type="button" class="ghost" data-act="open" data-key="own-${id}">Pronto</button></div>`;
   }
+  const money = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const numIn = v => v ? nf.format(v).replace(/\./g, "") : "";
   function xRow(e, showAct) {
     const a = showAct && e.activity_id ? get("activities", e.activity_id) : null;
-    return `<li class="xrow ${e.done ? "done" : ""}">
-      <input type="checkbox" class="big" data-act="set" data-t="extras" data-id="${e.id}" data-f="done" ${e.done ? "checked" : ""} aria-label="Resolvido: ${esc(e.item)}">
+    return `<li class="xrow ${e.done ? "done" : ""}" data-name="${esc(norm(e.item))}">
+      <input type="checkbox" class="big" data-act="set" data-t="extras" data-id="${e.id}" data-f="done" ${e.done ? "checked" : ""} aria-label="${e.buy ? "Comprado" : "Separado"}: ${esc(e.item)}">
       ${inp("extras", e.id, "item", e.item, 'aria-label="Item"')}
       <button class="x" data-act="del" data-t="extras" data-id="${e.id}" aria-label="Excluir ${esc(e.item)}">×</button>
-      <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}${ui.tab === "mine" ? `<span class="tag ${e.buy ? "buy" : "home"}">${e.buy ? "comprar" : "levar"}</span>` : ""}${a ? `<span class="tag">${esc(a.name)}</span>` : ""}</div>
+      <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}
+        ${e.buy ? `<label class="paid">R$ <input data-act="set" data-t="extras" data-id="${e.id}" data-f="paid" data-num="1" value="${esc(numIn(e.paid))}" inputmode="decimal" placeholder="pago" aria-label="Valor pago"></label>` : ""}
+        ${a ? `<span class="tag">${esc(a.name)}</span>` : ""}</div>
       ${pickPanel("extras", e.id, e.owner)}
     </li>`;
   }
+
+  /* listas: tudo que é comprar vai para Compras, tudo que é levar vai para Levar */
+  const GROUPS = { when_buy: "Quando comprar", sector: "Categoria", store: "Local de compra", owner: "Responsável" };
+  const NONE = { when_buy: "Sem data definida", sector: "Sem categoria", store: "Sem local definido", owner: "Sem responsável" };
+  const isDone = en => en.k === "i" ? !!en.r.bought : !!en.r.done;
+  const nameOf = en => en.k === "i" ? en.r.name : en.r.item;
+  const buyEntries = tot => [...S.ingredients.filter(i => tot.has(i.id) && !i.from_home).map(r => ({ k: "i", r })), ...S.extras.filter(e => e.buy).map(r => ({ k: "x", r }))];
+  const takeEntries = tot => [...S.ingredients.filter(i => tot.has(i.id) && i.from_home).map(r => ({ k: "i", r })), ...S.extras.filter(e => !e.buy).map(r => ({ k: "x", r }))];
+  function keyOf(en, g) {
+    if (g === "origin") {
+      if (en.k === "i") return "Comida que vem de casa";
+      const a = en.r.activity_id && get("activities", en.r.activity_id);
+      return a ? "Entretenimento: " + a.name : "Itens de uso geral";
+    }
+    if (g === "owner") return en.r.owner || NONE.owner;
+    if (en.k === "i") return en.r[g] || NONE[g];
+    if (g === "sector") return en.r.activity_id ? "Entretenimento" : "Uso geral";
+    return NONE[g];
+  }
+  function passF(en, f) {
+    const o = en.r.owner;
+    if (f.who && !(f.who === "-" ? !o : isMine(o, f.who))) return false;
+    if (f.status && (f.status === "done") !== isDone(en)) return false;
+    if (f.rev && (en.k !== "i" || (f.rev === "ok") === revMap.has(en.r.id))) return false;
+    if (f.sector && keyOf(en, "sector") !== f.sector) return false;
+    return true;
+  }
+  function groupList(entries, g, tot, tag = "h2") {
+    const groups = new Map();
+    entries.forEach(en => { const k = keyOf(en, g); (groups.get(k) || groups.set(k, []).get(k)).push(en); });
+    const order = [...groups.keys()].sort((a, b) => g === "when_buy" ? ((WHEN.indexOf(a) + 99) % 99) - ((WHEN.indexOf(b) + 99) % 99) : (a === NONE[g]) - (b === NONE[g]) || a.localeCompare(b, "pt"));
+    return order.map(k => {
+      const l = groups.get(k).sort((a, b) => nameOf(a).localeCompare(nameOf(b), "pt"));
+      return `<${tag} class="grp">${esc(k)} <small>${l.filter(isDone).length}/${l.length}</small></${tag}><ul class="shop xlist">${l.map(en => en.k === "i" ? vItem(en.r, tot.get(en.r.id), g) : xRow(en.r, g !== "origin")).join("")}</ul>`;
+    }).join("");
+  }
+  const sel = (f, opts) => `<select data-act="ui" data-f="${f}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${ui[f] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+  const whoOpts = () => [["", "Todas"], ...peopleNames().map(n => [n, n]), ["-", "Sem responsável"]];
+  const paidSum = entries => entries.reduce((t, en) => t + (Number(en.r.paid) || 0), 0);
   function recipeOptions(sel) {
     return BLOCKS.concat([...new Set(S.recipes.map(r => r.block))].filter(b => !BLOCKS.includes(b))).map(b => {
       const rs = S.recipes.filter(r => r.block === b).sort(byPos);
@@ -282,51 +324,35 @@
       </button>${body}</article>`;
   }
 
-  const GROUPS = { when_buy: "Quando comprar", sector: "Categoria", store: "Local de compra", owner: "Responsável" };
-  const NONE = { when_buy: "Sem data definida", sector: "Sem categoria", store: "Sem local definido", owner: "Sem responsável" };
   function vShop() {
-    const tot = shopping();
-    const used = S.ingredients.filter(i => tot.has(i.id));
+    const tot = shopping(), all = buyEntries(tot);
     const unused = S.ingredients.filter(i => !tot.has(i.id)).sort((a, b) => a.name.localeCompare(b.name, "pt"));
-    const okWho = o => !ui.fWho || (ui.fWho === "-" ? !o : isMine(o, ui.fWho));
-    const pass = i => okWho(i.owner)
-      && (!ui.fStatus || (ui.fStatus === "todo" ? !(i.bought || i.from_home) : ui.fStatus === "bought" ? i.bought : i.from_home))
-      && (!ui.fRev || (ui.fRev === "ok" ? !revMap.has(i.id) : revMap.has(i.id)));
-    const shown = used.filter(pass);
-    const keyOf = i => i[ui.group] || NONE[ui.group];
-    const groups = new Map();
-    shown.forEach(i => { const k = keyOf(i); (groups.get(k) || groups.set(k, []).get(k)).push(i); });
-    const order = [...groups.keys()].sort((a, b) => ui.group === "when_buy" ? ((WHEN.indexOf(a) + 99) % 99) - ((WHEN.indexOf(b) + 99) % 99) : (a === NONE[ui.group]) - (b === NONE[ui.group]) || a.localeCompare(b, "pt"));
-    const other = S.extras.filter(e => e.buy && okWho(e.owner) && (!ui.fStatus || (ui.fStatus === "todo" ? !e.done : ui.fStatus === "bought" ? e.done : false)) && !ui.fRev).sort(byPos);
-    const sel = (f, opts) => `<select data-act="ui" data-f="${f}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${ui[f] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
-    const filtered = ui.fWho || ui.fStatus || ui.fRev;
+    const shown = all.filter(en => passF(en, { who: ui.fWho, status: ui.fStatus, rev: ui.fRev }));
+    const paid = paidSum(all);
     return `<div class="shopbar">
       <input type="search" id="shop-q" placeholder="Buscar item" value="${esc(ui.q)}" aria-label="Buscar item">
       <label class="fld">Agrupar por ${sel("group", Object.entries(GROUPS))}</label>
-      <label class="fld">Pessoa ${sel("fWho", [["", "Todas"], ...peopleNames().map(n => [n, n]), ["-", "Sem responsável"]])}</label>
-      <label class="fld">Situação ${sel("fStatus", [["", "Tudo"], ["todo", "Falta resolver"], ["bought", "Já comprado"], ["home", "Vem de casa"]])}</label>
+      <label class="fld">Pessoa ${sel("fWho", whoOpts())}</label>
+      <label class="fld">Situação ${sel("fStatus", [["", "Tudo"], ["todo", "Falta comprar"], ["done", "Já comprado"]])}</label>
       <label class="fld">Revisão ${sel("fRev", [["", "Tudo"], ["ok", "Receitas revisadas"], ["todo", "Receita a revisar"]])}</label>
     </div>
-    ${filtered ? `<p class="hint">Mostrando ${shown.length} de ${used.length} itens. <button class="ghost" data-act="clear-filters">Limpar filtros</button></p>` : ""}
-    ${order.map(k => {
-      const list = groups.get(k).sort((a, b) => a.name.localeCompare(b.name, "pt"));
-      return `<h2>${esc(k)} <small>${list.filter(i => i.bought || i.from_home).length}/${list.length}</small></h2><ul class="shop">${list.map(i => vItem(i, tot.get(i.id))).join("")}</ul>`;
-    }).join("") || `<p class="empty">${used.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
-    ${other.length ? `<h2>Compras que não são comida <small>${other.filter(e => e.done).length}/${other.length}</small></h2>
-      <p class="hint">Itens das abas Levar e Entretenimento marcados com "Precisa comprar".</p>
-      <ul class="xlist">${other.map(e => xRow(e, true)).join("")}</ul>` : ""}
+    <p class="hint">${all.filter(isDone).length} de ${all.length} itens comprados${paid ? `, R$ ${money.format(paid)} pagos até agora` : ""}.
+      ${ui.fWho || ui.fStatus || ui.fRev ? `Mostrando ${shown.length}. <button class="ghost" data-act="clear-filters">Limpar filtros</button>` : ""}</p>
+    ${groupList(shown, ui.group, tot) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
+    <form class="newrow" data-form="add-extra" data-buy="1"><input name="item" placeholder="Adicionar compra que não é comida" required><button class="btn">Adicionar</button></form>
+    <p class="hint">O que vem de casa fica na aba Levar. Itens de Levar e Entretenimento marcados com "Precisa comprar" aparecem aqui.</p>
     ${unused.length ? `<details class="unused"><summary>Fora do cardápio (${unused.length})</summary>
       <p class="hint">Ingredientes que nenhuma receita ativa usa. As marcações ficam guardadas caso voltem.</p>
       <ul class="plain">${unused.map(i => `<li><span>${esc(i.name)}</span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}" data-confirm="Excluir ${esc(i.name)} de vez, inclusive das receitas guardadas?">Excluir</button></li>`).join("")}</ul></details>` : ""}`;
   }
-  function vItem(i, e) {
-    const open = ui.open.has(i.id), done = i.bought || i.from_home, pend = revMap.get(i.id);
+  function vItem(i, e, g) {
+    const open = ui.open.has(i.id), done = i.bought, pend = revMap.get(i.id);
     return `<li class="item ${done ? "done" : ""}" data-name="${esc(norm(i.name))}">
-      <input type="checkbox" class="big" data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought" ${i.bought ? "checked" : ""} aria-label="Comprado: ${esc(i.name)}">
+      <input type="checkbox" class="big" data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought" ${i.bought ? "checked" : ""} aria-label="${i.from_home ? "Separado" : "Comprado"}: ${esc(i.name)}">
       <button class="imain" data-act="open" data-key="${i.id}" aria-expanded="${open}">
         <span class="iname2">${esc(i.name)}</span><span class="iqty2">${esc(fmtQty(e.qty, i.unit))}</span>
         <span class="isub">${esc(i.buy_hint)}</span>
-        <span class="chips">${i.from_home ? `<span class="tag home">vem de casa</span>` : ui.tab === "mine" ? `<span class="tag buy">comprar</span>` : ""}${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}</span>
+        <span class="chips">${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${g !== "sector" && i.sector ? `<span class="tag">${esc(i.sector)}</span>` : ""}${g !== "when_buy" && i.when_buy && !i.from_home ? `<span class="tag when">${esc(i.when_buy)}</span>` : ""}${g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}</span>
       </button>
       ${open ? `<div class="ibody">
         <div class="grid2">
@@ -336,9 +362,10 @@
           <div class="fld">Responsável<div class="pickwrap">${pickBtn(i.id, i.owner)}</div>${pickPanel("ingredients", i.id, i.owner)}</div>
           <label class="fld">Quando comprar<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="when_buy">${[...new Set(WHEN.concat(i.when_buy || []))].map(w => `<option ${w === i.when_buy ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>
           <label class="fld">Categoria${inp("ingredients", i.id, "sector", i.sector, 'list="dl-sectors"')}</label>
+          <label class="fld">Valor pago (R$)<input data-act="set" data-t="ingredients" data-id="${i.id}" data-f="paid" data-num="1" value="${esc(numIn(i.paid))}" inputmode="decimal" placeholder="0,00"></label>
           <label class="fld">Local de compra${inp("ingredients", i.id, "store", i.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
         </div>
-        ${chk("ingredients", i.id, "from_home", i.from_home, "Vem de casa (alguém leva, não precisa comprar)")}
+        ${chk("ingredients", i.id, "from_home", i.from_home, "Vem de casa (alguém leva, não precisa comprar; vai para a aba Levar)")}
         <label class="fld">Observação${area("ingredients", i.id, "note", i.note, "Marca, tipo, onde achar")}</label>
         ${pend ? `<p class="uses todo">Falta revisar: ${pend.map(esc).join(", ")}. Confirme a receita antes de comprar.</p>` : ""}
         <p class="uses">Usado em: ${e.uses.map(u => `${esc(u.name)} (${esc(fmtQty(u.qty, i.unit))}${u.times > 1 ? " × " + u.times : ""})`).join("; ")}</p>
@@ -362,16 +389,19 @@
   }
 
   function vTake() {
-    const plain = S.extras.filter(e => !e.activity_id).sort(byPos);
-    const acts = [...S.activities].sort(byPos).map(a => [a, S.extras.filter(e => e.activity_id === a.id).sort(byPos)]).filter(([, l]) => l.length);
-    const cnt = l => `<small>${l.filter(e => e.done).length}/${l.length}</small>`;
-    return `<p class="lead">O que o grupo precisa levar ou comprar além da comida. Marque quando estiver separado ou comprado.</p>
-    <h2>Itens de uso geral ${cnt(plain)}</h2>
-    <ul class="xlist">${plain.map(e => xRow(e)).join("") || `<li class="empty">Nada na lista ainda.</li>`}</ul>
+    const tot = shopping(), all = takeEntries(tot);
+    const shown = all.filter(en => passF(en, { who: ui.tWho, status: ui.tStatus }));
+    const orphan = all.filter(en => !en.r.owner && !isDone(en)).map(nameOf);
+    return `<p class="lead">O que vem de casa: comida pronta, itens de uso geral e o que as atividades precisam. Marque quando estiver separado.</p>
+    ${orphan.length ? `<div class="warn"><strong>${orphan.length} ${orphan.length === 1 ? "item sem responsável" : "itens sem responsável"}:</strong> ${esc(orphan.slice(0, 8).join(", "))}${orphan.length > 8 ? ` e mais ${orphan.length - 8}` : ""}.
+      ${ui.tWho === "-" ? "" : `<button class="ghost" data-act="ui-set" data-f="tWho" data-v="-">Ver só esses</button>`}</div>` : ""}
+    <div class="shopbar">
+      <label class="fld">Pessoa ${sel("tWho", whoOpts())}</label>
+      <label class="fld">Situação ${sel("tStatus", [["", "Tudo"], ["todo", "Falta separar"], ["done", "Já separado"]])}</label>
+    </div>
+    ${groupList(shown, "origin", tot) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada na lista ainda."}</p>`}
     <form class="newrow" data-form="add-extra"><input name="item" placeholder="Adicionar item de uso geral" required><button class="btn">Adicionar</button></form>
-    <h2>Entretenimento ${cnt(acts.flatMap(([, l]) => l))}</h2>
-    <p class="hint">Vem do que cada atividade precisa. Para incluir itens, abra a atividade na aba Entretenimento.</p>
-    ${acts.map(([a, l]) => `<h3>${esc(a.name)}</h3><ul class="xlist">${l.map(e => xRow(e)).join("")}</ul>`).join("") || `<p class="empty">Nenhuma atividade tem itens ainda.</p>`}`;
+    <p class="hint">Marcar "Precisa comprar" manda o item para a aba Compras. Os itens de cada atividade são criados na aba Entretenimento.</p>`;
   }
 
   function vFun() {
@@ -397,33 +427,40 @@
     const names = peopleNames();
     const me = ui.me || names.find(n => norm(n) === norm(who)) || who || names[0] || "";
     const opts = names.some(n => norm(n) === norm(me)) || !me ? names : names.concat(me);
-    const tot = shopping();
-    const food = S.ingredients.filter(i => tot.has(i.id) && isMine(i.owner, me)).sort((a, b) => a.name.localeCompare(b.name, "pt"));
-    const things = S.extras.filter(e => isMine(e.owner, me)).sort(byPos);
     const people = `<h2>Pessoas do grupo</h2>
       <p class="hint">São os nomes que aparecem nas opções de responsável.</p>
       <ul class="plain">${[...S.people].sort(byPos).map(p => `<li><span>${esc(p.name)}</span><button class="x" data-act="del" data-t="people" data-id="${p.id}" data-confirm="Tirar ${esc(p.name)} das opções de responsável?" aria-label="Tirar ${esc(p.name)}">×</button></li>`).join("")}</ul>
       <form class="newrow" data-form="add-person"><input name="name" placeholder="Nome da pessoa" required><button class="btn">Adicionar pessoa</button></form>`;
     if (!me) return `<p class="lead">Cadastre as pessoas do grupo para ver a lista de cada uma.</p>${people}`;
-    return `<div class="shopbar"><label class="fld inline">Lista de <select data-act="ui" data-f="me">${opts.map(n => `<option ${norm(n) === norm(me) ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label></div>
-    <p class="hint">Tudo em que ${esc(me)} aparece como responsável, incluindo o que está marcado para todos.</p>
-    <h2>Comida e compras <small>${food.filter(i => i.bought || i.from_home).length}/${food.length}</small></h2>
-    ${food.length ? `<ul class="shop">${food.map(i => vItem(i, tot.get(i.id))).join("")}</ul>` : `<p class="empty">Nenhum item de compra. Defina os responsáveis na aba Compras.</p>`}
-    <h2>Coisas para comprar ou levar <small>${things.filter(e => e.done).length}/${things.length}</small></h2>
-    ${things.length ? `<ul class="xlist">${things.map(e => xRow(e, true)).join("")}</ul>` : `<p class="empty">Nenhum item para levar. Defina os responsáveis nas abas Levar e Entretenimento.</p>`}
+    const tot = shopping();
+    const buyAll = buyEntries(tot).filter(en => isMine(en.r.owner, me)), takeAll = takeEntries(tot).filter(en => isMine(en.r.owner, me));
+    const sectors = [...new Set(buyAll.map(en => keyOf(en, "sector")))].sort((a, b) => a.localeCompare(b, "pt"));
+    if (ui.mSector && !sectors.includes(ui.mSector)) ui.mSector = "";
+    const buy = buyAll.filter(en => passF(en, { status: ui.mStatus, sector: ui.mSector })), take = takeAll.filter(en => passF(en, { status: ui.mStatus }));
+    const cnt = l => `<small>${l.filter(isDone).length}/${l.length}</small>`, paid = paidSum(buyAll);
+    return `<div class="shopbar">
+      <label class="fld">Lista de <select data-act="ui" data-f="me">${opts.map(n => `<option ${norm(n) === norm(me) ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
+      <label class="fld">Situação ${sel("mStatus", [["", "Tudo"], ["todo", "Ainda não marcado"], ["done", "Já marcado"]])}</label>
+      <label class="fld">Categoria de compra ${sel("mSector", [["", "Todas"], ...sectors.map(x => [x, x])])}</label>
+    </div>
+    <p class="hint">Tudo em que ${esc(me)} aparece como responsável, incluindo o que está marcado para todos.${paid ? ` Valor pago nestes itens: R$ ${money.format(paid)}.` : ""}</p>
+    <h2 class="sec">Comprar ${cnt(buyAll)}</h2>
+    ${groupList(buy, "sector", tot, "h3") || `<p class="empty">${buyAll.length ? "Nenhuma compra com esses filtros." : "Nenhuma compra. Defina os responsáveis na aba Compras."}</p>`}
+    <h2 class="sec">Levar ${cnt(takeAll)}</h2>
+    ${groupList(take, "origin", tot, "h3") || `<p class="empty">${takeAll.length ? "Nenhum item com esses filtros." : "Nenhum item para levar. Defina os responsáveis na aba Levar."}</p>`}
     ${people}`;
   }
 
   function filterShop() {
     const k = norm(ui.q);
-    view.querySelectorAll(".shop .item").forEach(li => { li.hidden = !!k && !li.dataset.name.includes(k); });
+    view.querySelectorAll(".shop > li[data-name]").forEach(li => { li.hidden = !!k && !li.dataset.name.includes(k); });
   }
 
   /* ---------- ações ---------- */
   const num = v => { const n = parseFloat(String(v).replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
   function ensureIngredient(name, unit) {
     const found = findIng(name); if (found) return found;
-    const ing = { id: uid(), name: name.trim(), unit: (unit || "un").trim() || "un", store: "", sector: "Mercado", when_buy: "Semana da viagem (até 26/12)", buy_hint: "", bought: false, from_home: false, owner: "", note: "" };
+    const ing = { id: uid(), name: name.trim(), unit: (unit || "un").trim() || "un", store: "", paid: 0, sector: "Mercado", when_buy: "Semana da viagem (até 26/12)", buy_hint: "", bought: false, from_home: false, owner: "", note: "" };
     S.ingredients.push(ing); persist("ingredients", ing);
     toast(`Ingrediente novo criado: ${ing.name}.`);
     return ing;
@@ -443,6 +480,7 @@
         patch.name = v;
       }
       if (["recipes", "extras", "activities"].includes(t) && (f === "name" || f === "item") && !String(v).trim()) return render(true);
+      if (ui.tab !== "fun" && ((t === "extras" && f === "buy") || (t === "ingredients" && f === "from_home"))) toast((t === "extras") === !!v ? "Foi para a lista de compras." : "Foi para a lista de levar.");
       update(t, id, patch, force);
     } else if (act === "owner") {
       const { t, id, name } = el.dataset, row = get(t, id); if (!row) return;
@@ -484,6 +522,7 @@
     else if (act === "open-recipe") { ui.tab = "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
     else if (act === "del") { if (!el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
     else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
+    else if (act === "ui-set") { ui[el.dataset.f] = el.dataset.v; render(true); }
     else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ""; render(true); }
     else if (act === "logout") { client.auth.signOut().then(() => location.reload()); }
   });
@@ -501,7 +540,7 @@
     } else if (kind === "add-pend") {
       add("pendencias", { id: uid(), kind: "Dúvida", subject: v("subject"), detail: v("detail"), answer: "", done: false, pos: nextPos("pendencias") });
     } else if (kind === "add-extra") {
-      add("extras", { id: uid(), grp: "Levar", item: v("item"), owner: "", done: false, buy: false, activity_id: f.dataset.activity || null, pos: nextPos("extras") });
+      add("extras", { id: uid(), grp: "Levar", item: v("item"), owner: "", done: false, buy: f.dataset.buy === "1", paid: 0, activity_id: f.dataset.activity || null, pos: nextPos("extras") });
     } else if (kind === "new-activity") {
       const a = { id: uid(), name: v("name"), notes: "", pos: nextPos("activities") };
       ui.open.add(a.id); add("activities", a);

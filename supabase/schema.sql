@@ -12,7 +12,8 @@ create table if not exists an_ingredients (
   from_home boolean not null default false,
   owner text not null default '',
   note text not null default '',
-  store text not null default ''
+  store text not null default '',
+  paid numeric not null default 0
 );
 
 create table if not exists an_recipes (
@@ -86,6 +87,7 @@ create table if not exists an_extras (
   owner text not null default '',
   done boolean not null default false,
   buy boolean not null default false,
+  paid numeric not null default 0,
   activity_id uuid references an_activities(id) on delete cascade,
   pos double precision not null default 0
 );
