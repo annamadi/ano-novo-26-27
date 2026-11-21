@@ -12,9 +12,14 @@
   const LS_KEY = "ano-novo-2627";
   const BLOCKS = ["Jantar", "Café da manhã", "Snacks", "Sobremesa", "Bebidas", "Casa"];
   const FOOD = BLOCKS.filter(b => b !== "Casa");
-  const WHEN = ["Black Friday (27/11)", "Antecipado, se congelar", "Semana da viagem (até 26/12)",
-    "Fresco / repor lá", "A confirmar", "Compra à parte"];
-  const SECTORS = ["Mercado", "Hortifruti", "Feira", "Frios e laticínios", "Açougue / Peixaria", "Padaria", "Bebidas", "Congelados", "Casa"];
+  const WHEN = ["Black Friday (27/11)", "Antes da viagem", "Lá, durante a semana", "A definir"];
+  // nomes antigos, para os dados que ainda não foram renomeados no banco
+  const WHEN_OLD = { "Antecipado, se congelar": "Antes da viagem", "Semana da viagem (até 26/12)": "Antes da viagem", "Compra à parte": "Antes da viagem", "Fresco / repor lá": "Lá, durante a semana", "A confirmar": "A definir" };
+  const SEC_OLD = { "Mercado": "Mercearia", "Açougue / Peixaria": "Açougue e peixaria", "Casa": "Casa e descartáveis", "Feira": "Hortifruti" };
+  const whenOf = i => WHEN_OLD[i.when_buy] || i.when_buy || "";
+  const secOf = i => SEC_OLD[i.sector] || i.sector || "";
+  const isFreeze = i => !!i.freeze || i.when_buy === "Antecipado, se congelar";
+  const SECTORS = ["Mercearia", "Hortifruti", "Frios e laticínios", "Açougue e peixaria", "Padaria", "Bebidas", "Congelados", "Casa e descartáveis"];
 
   const HOME = "Alguém leva pronto";
   const isHome = i => !!i.from_home || i.when_buy === HOME;
@@ -101,7 +106,7 @@
         else if (OPTIONAL.has(t)) { needsSetup = true; S[t] = []; if (t === "trash") noTrash = true; }
         else throw r.error;
       });
-      if ((S.recipes[0] && !("reviewed" in S.recipes[0])) || (S.ingredients[0] && !("paid" in S.ingredients[0])) || (S.extras[0] && !("store" in S.extras[0])) || (S.ingredients[0] && !("bought_by" in S.ingredients[0]))) needsSetup = true;
+      if ((S.recipes[0] && !("reviewed" in S.recipes[0])) || (S.ingredients[0] && !("paid" in S.ingredients[0])) || (S.extras[0] && !("store" in S.extras[0])) || (S.ingredients[0] && !("bought_by" in S.ingredients[0])) || (S.ingredients[0] && !("freeze" in S.ingredients[0]))) needsSetup = true;
       client.channel("an-all").on("postgres_changes", { event: "*", schema: "public" }, p => {
         const t = p.table.startsWith(PREFIX) ? p.table.slice(PREFIX.length) : null;
         if (!t || !S[t]) return;
@@ -183,7 +188,7 @@
     document.querySelectorAll("#sub button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY;
     revMap = unreviewed();
-    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-04.sql).</p>` : "") +
+    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-05.sql).</p>` : "") +
       ({ start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
     window.scrollTo(0, y);
     view.querySelectorAll("input[placeholder]:not([aria-label])").forEach(i => { if (!i.closest("label")) i.setAttribute("aria-label", i.placeholder); });
@@ -222,7 +227,7 @@
   const tick = (t, id, f, val, label) => `<label class="tick"><input type="checkbox" data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" ${val ? "checked" : ""} aria-label="${esc(label)}"><span></span></label>`;
   const datalists = () => `<datalist id="dl-ings">${S.ingredients.map(i => `<option value="${esc(i.name)}">`).join("")}</datalist>
     <datalist id="dl-stores">${[...new Set([...S.ingredients, ...S.extras].map(i => i.store).filter(Boolean))].sort().map(o => `<option value="${esc(o)}">`).join("")}</datalist>
-    <datalist id="dl-sectors">${[...new Set(SECTORS.concat(S.ingredients.map(i => i.sector).filter(Boolean)))].sort((a, b) => a.localeCompare(b, "pt")).map(o => `<option value="${esc(o)}">`).join("")}</datalist>`;
+    <datalist id="dl-sectors">${[...new Set(SECTORS.concat(S.ingredients.map(secOf).filter(Boolean)))].sort((a, b) => a.localeCompare(b, "pt")).map(o => `<option value="${esc(o)}">`).join("")}</datalist>`;
 
   const inp = (t, id, f, val, extra = "") => `<input data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" value="${esc(val)}" ${extra}>`;
   const chk = (t, id, f, val, label) => `<label class="chk"><input type="checkbox" data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" ${val ? "checked" : ""}><span>${label}</span></label>`;
@@ -253,15 +258,15 @@
       <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}
         ${e.buy ? `<label class="paid">R$ <input data-act="set" data-t="extras" data-id="${e.id}" data-f="paid" data-num="1" value="${esc(numIn(e.paid))}" inputmode="decimal" placeholder="pago" aria-label="Valor pago"></label>
         ${hasCol("extras", "bought_by") ? `<select class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="bought_by" aria-label="Quem pagou">${payOpts(e.bought_by, "Quem pagou")}</select>` : ""}
-        <input class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="store" value="${esc(e.store)}" list="dl-stores" placeholder="Onde comprar" aria-label="Local de compra">` : ""}
+        <input class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="store" value="${esc(e.store)}" list="dl-stores" placeholder="Loja" aria-label="Loja">` : ""}
         ${a ? `<span class="tag">${esc(a.name)}</span>` : ""}</div>
       ${pickPanel("extras", e.id, e.owner)}
     </li>`;
   }
 
   /* listas: tudo que é comprar vai para Compras, tudo que é levar vai para Levar */
-  const GROUPS = { when_buy: "Quando comprar", sector: "Categoria", store: "Local de compra", owner: "Responsável", type: "Comida ou item" };
-  const NONE = { when_buy: "Sem data definida", sector: "Sem categoria", store: "Sem local definido", owner: "Sem responsável" };
+  const GROUPS = { when_buy: "Momento", sector: "Seção", store: "Loja", owner: "Pessoa", type: "Comida ou item" };
+  const NONE = { when_buy: "A definir", sector: "Sem seção", store: "Sem loja definida", owner: "Sem responsável" };
   const isDone = en => en.k === "i" ? !!en.r.bought : !!en.r.done;
   const nameOf = en => en.k === "i" ? en.r.name : en.r.item;
   const buyEntries = tot => [...S.ingredients.filter(i => tot.has(i.id) && !isHome(i)).map(r => ({ k: "i", r })), ...S.extras.filter(e => e.buy).map(r => ({ k: "x", r }))];
@@ -275,7 +280,7 @@
     if (g === "owner") return en.r.owner || NONE.owner;
     if (g === "type") return en.k === "i" ? "Comida" : "Itens";
     if (g === "store") return en.r.store || NONE.store;
-    if (en.k === "i") return en.r[g] || NONE[g];
+    if (en.k === "i") return (g === "when_buy" ? whenOf(en.r) : g === "sector" ? secOf(en.r) : en.r[g]) || NONE[g];
     if (g === "sector") return en.r.activity_id ? "Entretenimento" : "Uso geral";
     return NONE[g];
   }
@@ -305,6 +310,9 @@
     }).join("");
   }
   const sel = (f, opts) => `<select data-act="ui" data-f="${f}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${ui[f] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+  const pill = (f, label, opts) => `<select class="pill ${ui[f] ? "on" : ""}" data-act="ui" data-f="${f}" aria-label="Filtrar por ${esc(label.toLowerCase())}"><option value="">${esc(label)}</option>${opts.map(([v, l]) => `<option value="${esc(v)}" ${ui[f] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+  const seg3 = (f, labels) => `<div class="seg" role="group" aria-label="Situação">${[["", labels[0]], ["todo", labels[1]], ["done", labels[2]]].map(([v, l]) => `<button data-act="ui-set" data-f="${f}" data-v="${v}" aria-pressed="${ui[f] === v}">${l}</button>`).join("")}</div>`;
+  const people2 = () => [...peopleNames().map(n => [n, n]), ["-", "Sem responsável"]];
   const whoOpts = () => [["", "Todas"], ...peopleNames().map(n => [n, n]), ["-", "Sem responsável"]];
   const payOpts = (cur, none = "Ninguém ainda") => [["", none], ...[...new Set(peopleNames().concat(cur || []))].map(n => [n, n])].map(([v, l]) => `<option value="${esc(v)}" ${v === (cur || "") ? "selected" : ""}>${esc(l)}</option>`).join("");
   const paidBy = entries => { const m = new Map(); entries.forEach(en => { const v = Number(en.r.paid) || 0; if (v) m.set(en.r.bought_by || "sem nome", (m.get(en.r.bought_by || "sem nome") || 0) + v); }); return [...m].map(([n, v]) => `${n} R$ ${money.format(v)}`).join("; "); };
@@ -474,17 +482,19 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const paid = paidSum(all);
     return `<div class="shopbar">
       <input type="search" id="shop-q" placeholder="Buscar item" value="${esc(ui.q)}" aria-label="Buscar item">
-      <label class="fld">Agrupar por ${sel("group", Object.entries(GROUPS))}</label>
-      <label class="fld">Situação ${sel("fStatus", [["", "Tudo"], ["todo", "Falta comprar"], ["done", "Já comprado"]])}</label>
-      <button class="btn fbtn" data-act="ui-set" data-f="showF" data-v="${ui.showF ? "" : "1"}" aria-expanded="${!!ui.showF}">${ui.showF ? "Esconder filtros" : "Filtros"}${active ? ` (${active})` : ""}</button>
-      ${ui.showF ? `<label class="fld">Pessoa ${sel("fWho", whoOpts())}</label>
-      <label class="fld">Categoria ${pick("fSector", "Todas")}</label>
-      <label class="fld">Local de compra ${pick("fStore", "Todos")}</label>
-      <label class="fld">Quando comprar ${pick("fWhen", "Qualquer momento")}</label>
-      <label class="fld">Comida ou item ${pick("fType", "Os dois")}</label>
-      <label class="fld">Revisão ${sel("fRev", [["", "Tudo"], ["ok", "Receitas revisadas"], ["todo", "Receita a revisar"]])}</label>` : ""}
+      ${seg3("fStatus", ["Tudo", "Falta", "Comprado"])}
+      <label class="fld grouper">Agrupar por ${sel("group", Object.entries(GROUPS))}</label>
     </div>
-    ${paid || active || ui.fStatus ? `<p class="hint">${paid ? `R$ ${money.format(paid)} pagos até agora (${esc(paidBy(all))}). ` : ""}${active || ui.fStatus ? `Mostrando ${shown.length} de ${all.length} itens. <button class="ghost" data-act="clear-filters">Limpar filtros</button>` : ""}</p>` : `<p class="hint">Toque num grupo para abrir a lista.</p>`}
+    <div class="fchips" role="group" aria-label="Filtros">
+      ${pill("fWho", "Pessoa", people2())}
+      ${pill("fSector", "Seção", vals("sector").map(x => [x, x]))}
+      ${pill("fWhen", "Momento", vals("when_buy").map(x => [x, x]))}
+      ${pill("fStore", "Loja", vals("store").map(x => [x, x]))}
+      ${vals("type").length > 1 ? pill("fType", "Comida ou item", vals("type").map(x => [x, x])) : ""}
+      ${pill("fRev", "Revisão", [["ok", "Receitas revisadas"], ["todo", "Receita a revisar"]])}
+      ${active || ui.fStatus ? `<button class="ghost" data-act="clear-filters">Limpar</button>` : ""}
+    </div>
+    ${paid || active || ui.fStatus ? `<p class="hint">${paid ? `R$ ${money.format(paid)} pagos até agora (${esc(paidBy(all))}). ` : ""}${active || ui.fStatus ? `Mostrando ${shown.length} de ${all.length} itens.` : ""}</p>` : `<p class="hint">Toque num grupo para abrir a lista.</p>`}
     ${groupList(shown, ui.group, tot, "h2", active || ui.fStatus ? "shopf" : "shop", !!(active || ui.fStatus)) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
     <form class="newrow" data-form="add-extra" data-buy="1"><input name="item" placeholder="Adicionar compra que não é comida" required><button class="btn">Adicionar</button></form>
     <p class="hint">O que vem de casa fica na aba Levar. Itens de Levar e Entretenimento marcados com "Precisa comprar" aparecem aqui.</p>
@@ -500,7 +510,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <button class="imain" data-act="open" data-key="${i.id}" aria-expanded="${open}">
         <span class="iname2">${esc(i.name)}</span><span class="iqty2">${esc(fmtQty(e.qty, i.unit))}</span>
         <span class="isub">${stale ? "" : esc(i.buy_hint)}</span>
-        <span class="chips">${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${g !== "sector" && i.sector ? `<span class="tag">${esc(i.sector)}</span>` : ""}${g !== "when_buy" && i.when_buy && !isHome(i) ? `<span class="tag when">${esc(i.when_buy)}</span>` : ""}${g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}${i.bought && i.bought_by ? `<span class="tag ok">pago por ${esc(i.bought_by)}</span>` : ""}</span>
+        <span class="chips">${pend ? `<span class="tag sug">receita a revisar</span>` : ""}${g !== "sector" && secOf(i) ? `<span class="tag">${esc(secOf(i))}</span>` : ""}${g !== "when_buy" && whenOf(i) && !isHome(i) ? `<span class="tag">${esc(whenOf(i))}</span>` : ""}${isFreeze(i) && !isHome(i) ? `<span class="tag">congelar</span>` : ""}${g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""}${i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : ""}${i.bought && i.bought_by ? `<span class="tag ok">pago por ${esc(i.bought_by)}</span>` : ""}</span>
       </button>
       ${open ? `<div class="ibody">
         <div class="grid2">
@@ -508,12 +518,13 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           <label class="fld">Unidade${inp("ingredients", i.id, "unit", i.unit)}</label>
           <label class="fld">Como comprar (embalagem)${inp("ingredients", i.id, "buy_hint", i.buy_hint)}${stale ? `<span class="stale">Escrito quando o total era ${esc(fmtQty(Number(i.hint_qty), i.unit))}. Atualize ou apague.</span>` : ""}</label>
           <div class="fld">Responsável<div class="pickwrap">${pickBtn(i.id, i.owner)}</div>${pickPanel("ingredients", i.id, i.owner)}</div>
-          ${isHome(i) ? "" : `          <label class="fld">Quando comprar<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="when_buy">${[...new Set(WHEN.concat(i.when_buy || []))].map(w => `<option ${w === i.when_buy ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>`}
-          <label class="fld">Categoria${inp("ingredients", i.id, "sector", i.sector, 'list="dl-sectors"')}</label>
+          ${isHome(i) ? "" : `<label class="fld">Momento da compra<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="when_buy">${[...new Set(WHEN.concat(whenOf(i) || []))].map(w => `<option ${w === whenOf(i) ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>`}
+          <label class="fld">Seção do mercado${inp("ingredients", i.id, "sector", secOf(i), 'list="dl-sectors"')}</label>
           <label class="fld">Valor pago (R$)<input data-act="set" data-t="ingredients" data-id="${i.id}" data-f="paid" data-num="1" value="${esc(numIn(i.paid))}" inputmode="decimal" placeholder="0,00"></label>
           ${isHome(i) || !hasCol("ingredients", "bought_by") ? "" : `<label class="fld">Quem pagou<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought_by">${payOpts(i.bought_by)}</select></label>`}
-          <label class="fld">Local de compra${inp("ingredients", i.id, "store", i.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
+          <label class="fld">Loja${inp("ingredients", i.id, "store", i.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
         </div>
+        ${isHome(i) || !hasCol("ingredients", "freeze") ? "" : chk("ingredients", i.id, "freeze", isFreeze(i), "Dá para comprar antes e congelar")}
         ${chk("ingredients", i.id, "from_home", isHome(i), "Vem de casa (alguém leva, não precisa comprar; vai para a aba Levar)")}
         <label class="fld">Observação${area("ingredients", i.id, "note", i.note, "Marca, tipo, onde achar")}</label>
         ${pend ? `<p class="uses todo">Falta revisar: ${pend.map(esc).join(", ")}. Confirme a receita antes de comprar.</p>` : ""}
@@ -555,10 +566,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     return `<p class="lead">O que vem de casa: comida pronta, itens de uso geral e o que as atividades precisam. Marque quando estiver separado.</p>
     ${orphan.length ? `<div class="warn"><strong>${orphan.length} ${orphan.length === 1 ? "item sem responsável" : "itens sem responsável"}:</strong> ${esc(orphan.slice(0, 8).join(", "))}${orphan.length > 8 ? ` e mais ${orphan.length - 8}` : ""}.
       ${ui.tWho === "-" ? "" : `<button class="ghost" data-act="ui-set" data-f="tWho" data-v="-">Ver só esses</button>`}</div>` : ""}
-    <div class="shopbar">
-      <label class="fld">Pessoa ${sel("tWho", whoOpts())}</label>
-      <label class="fld">Situação ${sel("tStatus", [["", "Tudo"], ["todo", "Falta separar"], ["done", "Já separado"]])}</label>
-    </div>
+    <div class="shopbar">${seg3("tStatus", ["Tudo", "Falta", "Separado"])}</div>
+    <div class="fchips" role="group" aria-label="Filtros">${pill("tWho", "Pessoa", people2())}${ui.tWho || ui.tStatus ? `<button class="ghost" data-act="clear-take">Limpar</button>` : ""}</div>
     ${groupList(shown, "origin", tot, "h2", "take") || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada na lista ainda."}</p>`}
     <form class="newrow" data-form="add-extra"><input name="item" placeholder="Adicionar item de uso geral" required><button class="btn">Adicionar</button></form>
     <p class="hint">Marcar "Precisa comprar" manda o item para a aba Compras. Os itens de cada atividade são criados na aba Entretenimento, e os suprimentos da casa, na aba Casa.</p>`;
@@ -613,8 +622,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const cnt = l => `<small>${l.filter(isDone).length}/${l.length}</small>`, paid = paidSum(buyAll);
     return `<div class="shopbar">
       <label class="fld">Lista de <select data-act="ui" data-f="me">${opts.map(n => `<option ${norm(n) === norm(me) ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
-      <label class="fld">Situação ${sel("mStatus", [["", "Tudo"], ["todo", "Ainda não marcado"], ["done", "Já marcado"]])}</label>
-      <label class="fld">Categoria de compra ${sel("mSector", [["", "Todas"], ...sectors.map(x => [x, x])])}</label>
+      ${seg3("mStatus", ["Tudo", "Falta", "Feito"])}
+    </div>
+    <div class="fchips" role="group" aria-label="Filtros">${pill("mSector", "Seção", sectors.map(x => [x, x]))}</div>
     </div>
     <p class="hint">Tudo em que ${esc(me)} aparece como responsável, incluindo o que está marcado para todos.${paid ? ` Valor pago nestes itens: R$ ${money.format(paid)}.` : ""}</p>
     <h2 class="sec">Comprar ${cnt(buyAll)}</h2>
@@ -672,7 +682,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   const num = v => { const n = parseFloat(String(v).replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
   function ensureIngredient(name, unit) {
     const found = findIng(name); if (found) return found;
-    const ing = { id: uid(), name: name.trim(), unit: (unit || "un").trim() || "un", sector: "Mercado", when_buy: "Semana da viagem (até 26/12)", buy_hint: "", bought: false, from_home: false, owner: "", note: "" };
+    const ing = { id: uid(), name: name.trim(), unit: (unit || "un").trim() || "un", sector: "Mercearia", when_buy: "Antes da viagem", buy_hint: "", bought: false, from_home: false, owner: "", note: "" };
     S.ingredients.push(ing); persist("ingredients", ing);
     toast(`Ingrediente novo criado: ${ing.name}.`);
     return ing;
@@ -759,6 +769,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
     else if (act === "ui-set") { ui[el.dataset.f] = el.dataset.v; if (el.dataset.f === "menuView") localStorage.setItem("an-menu-view", el.dataset.v); render(true); }
     else if (act === "goto-day") { ui.tab = "menu"; localStorage.setItem("an-tab", "menu"); ui.open.add("d-" + el.dataset.id); ui.menuView = "list"; localStorage.setItem("an-menu-view", "list"); render(true); const n = document.getElementById("d-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
+    else if (act === "clear-take") { ui.tWho = ui.tStatus = ""; render(true); }
     else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ""; render(true); }
     else if (act === "logout") { client.auth.signOut().then(() => location.reload()); }
   });

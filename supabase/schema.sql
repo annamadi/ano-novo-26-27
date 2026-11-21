@@ -15,7 +15,8 @@ create table if not exists an_ingredients (
   store text not null default '',
   paid numeric not null default 0,
   bought_by text not null default '',
-  hint_qty numeric
+  hint_qty numeric,
+  freeze boolean not null default false
 );
 
 create table if not exists an_recipes (
