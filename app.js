@@ -19,9 +19,9 @@
   const HOME = "Alguém leva pronto";
   const isHome = i => !!i.from_home || i.when_buy === HOME;
   const S = Object.fromEntries(TABLES.map(t => [t, []]));
-  const ui = { tab: localStorage.getItem("an-tab") || "menu", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", fSector: "", fStore: "", fWhen: "", fType: "", showF: false, tWho: "", tStatus: "", mStatus: "", mSector: "", q: "", me: "", menuView: localStorage.getItem("an-menu-view") || "list", v: new URLSearchParams(location.search).get("v") || localStorage.getItem("an-v") || "a" };
+  const ui = { tab: localStorage.getItem("an-tab") || "start", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", fSector: "", fStore: "", fWhen: "", fType: "", showF: false, tWho: "", tStatus: "", mStatus: "", mSector: "", q: "", me: "", menuView: localStorage.getItem("an-menu-view") || "list", v: new URLSearchParams(location.search).get("v") || localStorage.getItem("an-v") || "a" };
   localStorage.setItem("an-v", ui.v);
-  if (!TABS.includes(ui.tab)) ui.tab = "menu";
+  if (!TABS.includes(ui.tab)) ui.tab = "start";
   let client = null, renderPending = false, needsSetup = false, noTrash = false, revMap = new Map();
 
   const $ = s => document.querySelector(s);
@@ -175,7 +175,6 @@
     document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.sec === sec ? "page" : "false"));
     $("#sub").hidden = sec !== "plano";
     $("#top").hidden = ui.tab === "start";
-    const sb = $('#tabs [data-tab="start"]'), pb = $('#tabs [data-tab="pend"]'); sb.hidden = ui.v !== "b"; pb.hidden = ui.v === "b";
     document.querySelectorAll("#sub button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY;
     revMap = unreviewed();
@@ -392,8 +391,12 @@
         <label class="fld">Nome${inp("recipes", r.id, "name", r.name)}</label>
         <label class="fld">Tipo<select data-act="set" data-t="recipes" data-id="${r.id}" data-f="block">${[...new Set(BLOCKS.concat(r.block))].map(b => `<option ${b === r.block ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></label>
         <label class="fld">Para quantas pessoas${inp("recipes", r.id, "serves", r.serves)}</label>
-        <div class="fld">${chk("recipes", r.id, "weekly", r.weekly, "Conta a semana toda (sem dia marcado)")}</div>
-      </div>`}
+      </div>
+      <div class="fld">Quando entra no cardápio
+        <div class="daypick">${[...S.days].sort((a, b) => a.date.localeCompare(b.date)).map(d => { const L = dayLabel(d, true), on = S.menu.some(m => m.day_id === d.id && m.recipe_id === r.id);
+          return `<button type="button" class="dchip" data-act="toggle-day" data-r="${r.id}" data-d="${d.id}" aria-pressed="${on}" aria-label="${L.wk} ${L.dd}"><b>${L.dd}</b><small>${L.wk}</small></button>`; }).join("")}
+          <button type="button" class="dchip wide" data-act="weekly" data-id="${r.id}" data-v="${r.weekly ? 0 : 1}" aria-pressed="${!!r.weekly}">Semana toda</button></div>
+        <span class="note">Sem nenhum dia marcado, a receita fica como ideia e não entra nas compras.</span></div>`}
       <ul class="items">${items.map(it => {
         const g = get("ingredients", it.ingredient_id) || { name: "?", unit: "" };
         const more = ui.open.has(it.id);
@@ -599,10 +602,7 @@
     ${people}
     ${noTrash ? "" : `<h2>Lixeira <small>${S.trash.length}</small></h2>
     <p class="hint">O que foi excluído fica aqui por 7 dias e pode voltar.</p>
-    ${S.trash.length ? `<ul class="plain">${[...S.trash].sort((a, b) => String(b.deleted_at).localeCompare(String(a.deleted_at))).map(t => `<li><span>${esc(t.label)} <small class="note">${KIND[t.tbl] || ""}${t.deleted_by ? ", excluído por " + esc(t.deleted_by) : ""}</small></span><button class="ghost" data-act="restore" data-id="${t.id}">Restaurar</button></li>`).join("")}</ul>` : `<p class="empty">Vazia.</p>`}`}
-    <h2>Visual</h2>
-    <p class="hint">Há uma segunda opção de tela inicial para comparar.</p>
-    <button class="btn" data-act="set-v" data-v="b">Experimentar a opção B</button>`;
+    ${S.trash.length ? `<ul class="plain">${[...S.trash].sort((a, b) => String(b.deleted_at).localeCompare(String(a.deleted_at))).map(t => `<li><span>${esc(t.label)} <small class="note">${KIND[t.tbl] || ""}${t.deleted_by ? ", excluído por " + esc(t.deleted_by) : ""}</small></span><button class="ghost" data-act="restore" data-id="${t.id}">Restaurar</button></li>`).join("")}</ul>` : `<p class="empty">Vazia.</p>`}`}`;
   }
 
   function vStart() {
@@ -633,7 +633,7 @@
       ${tile("pend", "pend", "Pendências", open, "", open === 1 ? "em aberto" : "em aberto")}
       ${tile("recipes", "plano", "Receitas revisadas", cnt(act, r => r.reviewed), `/${act.length}`, "confira antes de alguém comprar", "wide")}
     </div>
-    <p class="hint"><button class="ghost" data-act="set-v" data-v="a">Voltar para o visual anterior</button></p>`;
+`;
   }
 
   function filterShop() {
@@ -723,6 +723,10 @@
     else if (act === "restore") { $("#toast").classList.remove("on"); restore(el.dataset.id); }
     else if (act === "pend-out") update("pendencias", el.dataset.id, { recipe_id: null }, true);
     else if (act === "set-v") { ui.v = el.dataset.v; localStorage.setItem("an-v", ui.v); go(ui.v === "b" ? "start" : "menu"); }
+    else if (act === "toggle-day") {
+      const m = S.menu.find(x => x.day_id === el.dataset.d && x.recipe_id === el.dataset.r);
+      if (m) remove("menu", m.id); else add("menu", { id: uid(), day_id: el.dataset.d, recipe_id: el.dataset.r, pos: nextPos("menu") });
+    }
     else if (act === "weekly") { const r = get("recipes", el.dataset.id), on = el.dataset.v === "1"; if (r) { toast(on ? `${r.name} entrou na semana toda.` : `${r.name} virou ideia e saiu das compras.`); update("recipes", r.id, { weekly: on }, true); } }
     else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
     else if (act === "ui-set") { ui[el.dataset.f] = el.dataset.v; if (el.dataset.f === "menuView") localStorage.setItem("an-menu-view", el.dataset.v); render(true); }
@@ -758,7 +762,7 @@
   });
   function go(t) {
     if (t === "plano") t = localStorage.getItem("an-plano") || "menu";
-    if (!TABS.includes(t)) t = "menu";
+    if (!TABS.includes(t)) t = "start";
     ui.tab = t; localStorage.setItem("an-tab", t);
     if (SEC[t] === "plano") localStorage.setItem("an-plano", t);
     [...ui.open].filter(k => k.startsWith("own-")).forEach(k => ui.open.delete(k)); render(true); window.scrollTo(0, 0);
@@ -773,8 +777,7 @@
     }
     if (!noTrash) S.trash.filter(t => Date.now() - new Date(t.deleted_at) > 7 * 864e5).forEach(t => { removeLocal("trash", t.id); persistDelete("trash", t.id); });
     if (client && S.ingredients[0] && "hint_qty" in S.ingredients[0]) { const tot = shopping(); S.ingredients.filter(i => i.buy_hint && i.hint_qty == null && tot.has(i.id)).forEach(i => { i.hint_qty = tot.get(i.id).qty; persist("ingredients", i); }); }
-    if (ui.v === "b" && !sessionStorage.getItem("an-seen")) ui.tab = "start";
-    if (ui.v !== "b" && ui.tab === "start") ui.tab = "menu";
+    if (!sessionStorage.getItem("an-seen")) ui.tab = "start";
     sessionStorage.setItem("an-seen", "1");
     $("#login").hidden = true; $("#app").hidden = false; render(true);
   }
