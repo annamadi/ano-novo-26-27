@@ -4,5 +4,7 @@
 window.APP_CONFIG = {
   supabaseUrl: "",
   supabaseKey: "",
-  groupEmail: "",
+  // Cada pessoa entra com o primeiro nome; o site monta "nome@loginDomain".
+  // No Supabase, crie os usuários assim: anna@anonovo.invalid, etc.
+  loginDomain: "anonovo.invalid",
 };

@@ -2,6 +2,7 @@
    A lista de compras nunca é guardada: é sempre calculada a partir do cardápio. */
 (() => {
   const CFG = window.APP_CONFIG || {};
+  let who = "";
   const TABLES = ["ingredients", "recipes", "recipe_items", "days", "menu", "pendencias", "extras"];
   const PREFIX = "an_";
   const LS_KEY = "ano-novo-2627";
@@ -121,7 +122,7 @@
     const tot = shopping(); let done = 0;
     tot.forEach((_, id) => { const i = get("ingredients", id); if (i && (i.bought || i.from_home)) done++; });
     $("#status").innerHTML = `${done} de ${tot.size} itens de compra resolvidos` +
-      (client ? ` <button class="link" data-act="logout">Sair</button>` : ` <span class="local">modo local: os dados ficam só neste navegador</span>`);
+      (client ? ` <span class="who">${esc(who)}</span> <button class="link" data-act="logout">Sair</button>` : ` <span class="local">modo local: os dados ficam só neste navegador</span>`);
     if (ui.tab === "shop" && ui.q) filterShop();
   }
   const datalists = () => `<datalist id="dl-ings">${S.ingredients.map(i => `<option value="${esc(i.name)}">`).join("")}</datalist>
@@ -394,12 +395,16 @@
     if (CFG.supabaseUrl && CFG.supabaseKey && window.supabase) {
       client = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey);
       const { data } = await client.auth.getSession();
-      if (data.session) return start();
-      $("#login").hidden = false; $("#pw").focus();
+      const setWho = u => { const n = ((u && u.email) || "").split("@")[0]; who = n ? n[0].toUpperCase() + n.slice(1) : ""; };
+      if (data.session) { setWho(data.session.user); return start(); }
+      $("#login").hidden = false; $("#who").focus();
       $("#login-form").addEventListener("submit", async e => {
         e.preventDefault(); $("#login-err").textContent = "";
-        const { error } = await client.auth.signInWithPassword({ email: CFG.groupEmail, password: $("#pw").value });
-        if (error) { $("#login-err").textContent = /invalid/i.test(error.message) ? "Senha incorreta. Confira com o grupo e tente de novo." : "Não foi possível entrar. Confira a conexão e tente de novo."; return; }
+        const slug = $("#who").value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!slug) { $("#login-err").textContent = "Digite seu nome."; return; }
+        const { data: auth, error } = await client.auth.signInWithPassword({ email: `${slug}@${CFG.loginDomain}`, password: $("#pw").value });
+        if (!error) setWho(auth.user);
+        if (error) { $("#login-err").textContent = /invalid/i.test(error.message) ? "Nome ou senha não conferem. Use só o primeiro nome, como foi combinado no grupo." : "Não foi possível entrar. Confira a conexão e tente de novo."; return; }
         start();
       });
     } else start();
