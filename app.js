@@ -25,7 +25,7 @@
   const HOME = "Alguém leva pronto";
   const isHome = i => !!i.from_home || i.when_buy === HOME;
   const S = Object.fromEntries(TABLES.map(t => [t, []]));
-  const ui = { tab: localStorage.getItem("an-tab") || "start", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", fSector: "", fStore: "", fWhen: "", fType: "", tWho: "", tStatus: "", mStatus: "", mSector: "", q: "", me: "", menuView: localStorage.getItem("an-menu-view") || "list" };
+  const ui = { tab: localStorage.getItem("an-tab") || "start", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", fSector: "", fStore: "", fWhen: "", fType: "", tWho: "", tStatus: "", mStatus: "", mSector: "", rq: "", rBlock: "", rIn: "", rRev: "", q: "", me: "", menuView: localStorage.getItem("an-menu-view") || "list" };
   if (!TABS.includes(ui.tab)) ui.tab = "start";
   let client = null, renderPending = false, needsSetup = false, noTrash = false, noComments = false, revMap = new Map();
 
@@ -248,6 +248,7 @@
     view.querySelectorAll("input[placeholder]:not([aria-label])").forEach(i => { if (!i.closest("label")) i.setAttribute("aria-label", i.placeholder); });
     $("#top").innerHTML = ui.tab === "start" ? "" : header();
     if (ui.tab === "shop" && ui.q) filterShop();
+    if (ui.tab === "recipes" && ui.rq) filterRecipes();
   }
   const meName = () => { const names = peopleNames(); return ui.me || names.find(n => norm(n) === norm(who)) || who || names[0] || ""; };
   function headStat(tot) {
@@ -405,11 +406,11 @@
         const [y, m, dd] = d.date.split("-").map(Number), wd = new Date(y, m - 1, dd).getDay(), L = dayLabel(d, true), ds = names(d);
         return `<button class="calday ${d.veg_guest ? "veg" : ""}" style="grid-column:${wd + 1}" data-act="goto-day" data-id="${d.id}" aria-label="Abrir ${L.wk} ${L.dd}">
           <span class="calnum"><b>${L.dd}</b> ${L.mon}</span>
-          ${byCat(ds).map(([b, l]) => l.map(r => `<span class="dish">${b === "Jantar" ? "" : `<small class="cat">${esc(b)}</small>`}${esc(short(r.name))}</span>`).join("")).join("") || `<span class="dish none">sem prato</span>`}
-          <span class="calfoot">${d.people} pessoas${d.veg_guest ? `<br>opção vegetariana` : ""}</span>
+          ${byCat(ds).map(([b, l]) => l.map(r => `<span class="dish">${b === "Jantar" ? "" : `<small class="cat">${esc(b === VEG ? "Vegetariana" : b)}</small>`}${esc(short(r.name))}</span>`).join("")).join("") || `<span class="dish none">sem prato</span>`}
+          <span class="calfoot">${d.people} pessoas${d.veg_guest && !ds.some(r => r.block === VEG) && !d.veg_option ? `<br><b>falta opção vegetariana</b>` : ""}</span>
         </button>`;
       }).join("")}</div></div>
-      <p class="hint">Toque num dia para abrir e editar.</p>`;
+      <p class="hint">Toque num dia para abrir e editar. A faixa verde marca os dias que precisam de opção vegetariana.</p>`;
     return `<p class="lead">Toque num dia para trocar o prato. A lista de compras se refaz sozinha com o que estiver aqui.</p>
     <div class="seg" role="group" aria-label="Visualização">
       <button data-act="ui-set" data-f="menuView" data-v="list" aria-pressed="${ui.menuView !== "cal"}">Lista</button>
@@ -458,23 +459,41 @@
   }
 
   function vRecipes() {
-    const blocks = foodBlocks();
-    const active = S.recipes.filter(r => recipeCount(r));
-    return `<p class="lead">Enquanto uma receita não for revisada, os ingredientes dela ficam com aviso na lista de compras.</p>
-    <form class="newrow" data-form="new-recipe">
-      <input name="name" placeholder="Nome da receita nova" required>
-      <select name="block" aria-label="Tipo">${FOOD.map(b => `<option>${b}</option>`).join("")}</select>
-      <button class="btn primary">Criar receita</button></form>
-    <button class="ghost" data-act="open" data-key="paste">${ui.open.has("paste") ? "Fechar" : "Criar a partir de um texto com os ingredientes"}</button>
-    ${ui.open.has("paste") ? `<form class="paste" data-form="paste-recipe">
-      <input name="name" placeholder="Nome da receita" required>
-      <select name="block" aria-label="Tipo">${FOOD.map(b => `<option>${b}</option>`).join("")}</select>
-      <textarea name="text" rows="7" required placeholder="Um ingrediente por linha, por exemplo:&#10;500 g carne moída&#10;2 latas de milho&#10;1 cebola"></textarea>
-      <button class="btn primary">Criar receita com estes ingredientes</button></form>` : ""}
-    ${blocks.map(b => {
-      const rs = S.recipes.filter(r => r.block === b).sort(byPos);
-      return rs.length ? `<h2>${esc(b)}</h2>${rs.map(r => vRecipe(r)).join("")}` : "";
-    }).join("")}`;
+    const pass = r => (!ui.rBlock || r.block === ui.rBlock) && (!ui.rIn || (ui.rIn === "in") === !!recipeCount(r)) && (!ui.rRev || (ui.rRev === "ok") === !!r.reviewed);
+    const add = ui.open.has("newrec");
+    return `<div class="shopbar">
+      <input type="search" id="rec-q" placeholder="Buscar receita" value="${esc(ui.rq || "")}" aria-label="Buscar receita">
+    </div>
+    <div class="fchips" role="group" aria-label="Filtros">
+      ${pill("rBlock", "Tipo", foodBlocks().map(b => [b, b]))}
+      ${pill("rIn", "Cardápio", [["in", "No cardápio"], ["out", "Fora do cardápio"]])}
+      ${pill("rRev", "Revisão", [["ok", "Revisadas"], ["todo", "A revisar"]])}
+      ${ui.rBlock || ui.rIn || ui.rRev ? `<button class="ghost" data-act="clear-rec">Limpar</button>` : ""}
+    </div>
+    <button class="btn ${add ? "" : "primary"}" data-act="open" data-key="newrec" aria-expanded="${add}">${add ? "Fechar" : "Nova receita"}</button>
+    ${add ? `<div class="paste">
+      <form class="newrow" data-form="new-recipe">
+        <input name="name" placeholder="Nome da receita nova" required>
+        <select name="block" aria-label="Tipo">${FOOD.map(b => `<option>${b}</option>`).join("")}</select>
+        <button class="btn primary">Criar vazia</button></form>
+      <p class="hint">Ou cole a lista de ingredientes, uma linha para cada:</p>
+      <form class="paste-in" data-form="paste-recipe">
+        <input name="name" placeholder="Nome da receita" required>
+        <select name="block" aria-label="Tipo">${FOOD.map(b => `<option>${b}</option>`).join("")}</select>
+        <textarea name="text" rows="6" required placeholder="500 g carne moída&#10;2 latas de milho&#10;1 cebola"></textarea>
+        <button class="btn primary">Criar com estes ingredientes</button></form></div>` : ""}
+    ${foodBlocks().map(b => {
+      const rs = S.recipes.filter(r => r.block === b && pass(r)).sort(byPos);
+      return rs.length ? `<section class="rblock"><h2>${esc(b)} <small>${rs.length}</small></h2>${rs.map(r => vRecipe(r)).join("")}</section>` : "";
+    }).join("") || `<p class="empty">Nenhuma receita com esses filtros.</p>`}`;
+  }
+  function filterRecipes() {
+    const k = norm(ui.rq);
+    view.querySelectorAll("section.rblock").forEach(sec => {
+      let hit = 0;
+      sec.querySelectorAll(":scope > .recipe").forEach(a => { a.hidden = !!k && !a.dataset.name.includes(k); if (!a.hidden) hit++; });
+      sec.hidden = !hit;
+    });
   }
   function vRecipe(r, flat) {
     const open = flat || ui.open.has(r.id), st = recipeStatus(r);
@@ -508,6 +527,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           ${more ? `<div class="more">
             <label class="fld">Observação${inp("recipe_items", it.id, "note", it.note)}</label>
             ${g.id ? `<label class="fld">Seção do mercado${inp("ingredients", g.id, "sector", secOf(g), 'list="dl-sectors"')}</label>
+            <label class="fld">Loja${inp("ingredients", g.id, "store", g.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
             <label class="fld">Momento da compra<select data-act="set" data-t="ingredients" data-id="${g.id}" data-f="when_buy">${[...new Set(WHEN.concat(whenOf(g) || []))].map(w => `<option ${w === whenOf(g) ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>` : ""}
             ${g.id ? `<div class="fld">Responsável por este ingrediente<div class="pickwrap">${pickBtn(g.id, g.owner)}</div>${pickPanel("ingredients", g.id, g.owner)}</div>` : ""}
             <label class="fld">Vegetariano?<select data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="veg">
@@ -534,7 +554,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <button class="btn danger" data-act="del" data-t="recipes" data-id="${r.id}" data-confirm="Excluir a receita ${esc(r.name)}?">Excluir receita</button>`}
     </div>`;
     if (flat) return `<article class="recipe open flat" id="r-${r.id}">${body}</article>`;
-    return `<article class="recipe ${open ? "open" : ""}" id="r-${r.id}">
+    return `<article class="recipe ${open ? "open" : ""}" id="r-${r.id}" data-name="${esc(norm(r.name))}">
       <button class="rhead chev" data-act="open" data-key="${r.id}" aria-expanded="${open}"><span>
         <span class="rname">${esc(r.name)}</span>
         <span class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)}, ${items.length} ${items.length === 1 ? "item" : "itens"}</span></span>
@@ -632,15 +652,17 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   }
   function vPend() {
     const free = S.pendencias.filter(p => !p.recipe_id), linked = S.pendencias.length - free.length;
-    const kinds = [...new Set(free.map(p => p.kind))];
+    const todo = free.filter(p => !p.done), done = free.filter(p => p.done).sort(byPos);
+    const kinds = [...new Set(todo.map(p => p.kind))];
     return `<form class="newrow" data-form="add-pend">
       <input name="subject" placeholder="Assunto" required><input name="detail" placeholder="Qual é a dúvida ou o lembrete?">
       <button class="btn primary">Adicionar pendência</button></form>
     <p class="hint">${linked ? `${linked} ${linked === 1 ? "pendência está" : "pendências estão"} dentro das receitas. ` : ""}Se a dúvida é sobre uma receita, mova para ela: passa a aparecer só lá.</p>
     ${kinds.map(k => {
-      const list = free.filter(p => p.kind === k).sort((a, b) => (a.done - b.done) || byPos(a, b));
-      return `<h2>${esc(k)} <small>${list.filter(p => p.done).length}/${list.length}</small></h2><ul class="pend">${list.map(p => pendRow(p)).join("")}</ul>`;
-    }).join("") || `<p class="empty">Nenhuma pendência geral.</p>`}`;
+      const list = todo.filter(p => p.kind === k).sort(byPos);
+      return `<h2>${esc(k)} <small>${list.length}</small></h2><ul class="pend">${list.map(p => pendRow(p)).join("")}</ul>`;
+    }).join("") || `<p class="empty">Nenhuma pendência em aberto.</p>`}
+    ${done.length ? `<h2>Resolvidas <small>${done.length}</small></h2><ul class="pend">${done.map(p => pendRow(p)).join("")}</ul>` : ""}`;
   }
 
   function vTake() {
@@ -696,16 +718,15 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (!me) return `<p class="lead">Cadastre as pessoas do grupo em Ajustes para ver a lista de cada uma.</p><button class="btn" data-go="cfg">Abrir Ajustes</button>`;
     const tot = shopping();
     const buyAll = buyEntries(tot).filter(en => isMine(en.r.owner, me)), takeAll = takeEntries(tot).filter(en => isMine(en.r.owner, me));
-    const sectors = [...new Set(buyAll.map(en => keyOf(en, "sector")))].sort((a, b) => a.localeCompare(b, "pt"));
+    const sectors = [...new Set([...buyAll, ...takeAll].map(en => keyOf(en, "sector")))].sort((a, b) => a.localeCompare(b, "pt"));
     if (ui.mSector && !sectors.includes(ui.mSector)) ui.mSector = "";
-    const buy = buyAll.filter(en => passF(en, { status: ui.mStatus, sector: ui.mSector })), take = takeAll.filter(en => passF(en, { status: ui.mStatus }));
+    const buy = buyAll.filter(en => passF(en, { status: ui.mStatus, sector: ui.mSector })), take = takeAll.filter(en => passF(en, { status: ui.mStatus, sector: ui.mSector }));
     const cnt = l => `<small>${l.filter(isDone).length}/${l.length}</small>`, paid = paidSum(buyAll);
     return `<div class="shopbar">
       <label class="fld">Lista de <select data-act="ui" data-f="me">${opts.map(n => `<option ${norm(n) === norm(me) ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
       ${seg3("mStatus", ["Tudo", "Falta", "Feito"])}
     </div>
-    <div class="fchips" role="group" aria-label="Filtros">${pill("mSector", "Seção", sectors.map(x => [x, x]))}</div>
-    </div>
+    <div class="fchips" role="group" aria-label="Filtros">${pill("mSector", "Seção", sectors.map(x => [x, x]))}${ui.mSector || ui.mStatus ? `<button class="ghost" data-act="clear-mine">Limpar</button>` : ""}</div>
     <p class="hint">Tudo em que ${esc(me)} aparece como responsável, incluindo o que está marcado para todos.${paid ? ` Valor pago nestes itens: R$ ${money.format(paid)}.` : ""}</p>
     ${(bulk.set("mine-all", { name: "Lista de " + me, list: [...buyAll, ...takeAll] }), "")}<button class="btn" data-act="copy-list" data-key="mine-all">Copiar minha lista</button>
     <h2 class="sec">Comprar ${cnt(buyAll)}</h2>
@@ -888,19 +909,20 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   view.addEventListener("input", e => {
     const el = e.target;
     if (el.id === "shop-q") { ui.q = el.value; filterShop(); }
+    if (el.id === "rec-q") { ui.rq = el.value; filterRecipes(); }
     if (el.dataset.act === "ing-hint") {
       const u = el.form.elements.unit, g = findIng(el.value);
       u.value = g ? g.unit : u.disabled ? "" : u.value; u.disabled = !!g;
     }
   });
-  view.addEventListener("focusout", () => setTimeout(() => { if (renderPending) render(false); }, 0));
+  view.addEventListener("focusout", () => setTimeout(() => { if (renderPending) render(false); }, 350));
   document.addEventListener("click", e => {
     const g = e.target.closest("[data-go]"); if (g) return go(g.dataset.go);
     const el = e.target.closest("[data-act]"); if (!el || /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
     const act = el.dataset.act;
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "back") { ui.back = null; go("menu"); }
-    else if (act === "open-recipe") { ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
+    else if (act === "open-recipe") { ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
     else if (act === "del") { if (!el.dataset.confirm || confirm(el.dataset.confirm)) remove(el.dataset.t, el.dataset.id); }
     else if (act === "bulk-owner") {
       const b = bulk.get(el.dataset.key), who2 = el.closest(".bulk").querySelector("select").value; if (!b) return;
@@ -932,6 +954,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
     else if (act === "ui-set") { ui[el.dataset.f] = el.dataset.v; if (el.dataset.f === "menuView") localStorage.setItem("an-menu-view", el.dataset.v); render(true); }
     else if (act === "goto-day") { ui.tab = "menu"; localStorage.setItem("an-tab", "menu"); ui.open.add("d-" + el.dataset.id); ui.menuView = "list"; localStorage.setItem("an-menu-view", "list"); render(true); const n = document.getElementById("d-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
+    else if (act === "clear-mine") { ui.mSector = ui.mStatus = ""; render(true); }
+    else if (act === "clear-rec") { ui.rBlock = ui.rIn = ui.rRev = ""; render(true); }
     else if (act === "clear-take") { ui.tWho = ui.tStatus = ""; render(true); }
     else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ""; render(true); }
     else if (act === "logout") { client.auth.signOut().then(() => location.reload()); }
@@ -944,7 +968,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       add("recipe_items", { id: uid(), recipe_id: f.dataset.id, ingredient_id: ing.id, qty: num(v("qty")), suggested: false, veg: "", note: "", pos: nextPos("recipe_items") });
     } else if (kind === "new-recipe") {
       const r = { id: uid(), name: v("name"), block: v("block"), reviewed: false, reviewed_by: "", serves: "", weekly: false, notes: "", prep: "", pos: nextPos("recipes") };
-      ui.open.add(r.id); add("recipes", r);
+      ui.open.delete("newrec"); ui.open.add(r.id); add("recipes", r);
       toast("Receita criada como ideia. Coloque num dia do cardápio para contar nas compras.");
       const n = document.getElementById("r-" + r.id); if (n) n.scrollIntoView({ block: "center" });
     } else if (kind === "add-pend") {
@@ -973,7 +997,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         const it = { id: uid(), recipe_id: r.id, ingredient_id: ing.id, qty, suggested: false, veg: "", note: "", pos: pos++ };
         S.recipe_items.push(it); persist("recipe_items", it);
       }
-      ui.open.delete("paste"); ui.open.add(r.id); render(true);
+      ui.open.delete("newrec"); ui.open.add(r.id); render(true);
       toast(`Receita criada com ${lines.length} ingredientes${novos ? `, ${novos} novos` : ""}. Confira as quantidades.`);
     } else if (kind === "add-person") {
       const name = v("name");

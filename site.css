@@ -366,3 +366,19 @@ select.pill.on { background-color: var(--ink); border-color: var(--ink); color: 
 .todo { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; background: var(--warn-bg); color: var(--warn-ink); border: 0; border-radius: 14px; padding: 0 14px; min-height: 52px; font-weight: 600; cursor: pointer; margin: 0 0 4px; }
 .todo span { flex: 1; }
 .todo:active { filter: brightness(.97); }
+
+/* calendário mais largo e sem palavras partidas; divisória nos cartões dos dias */
+.cal { grid-template-columns: repeat(7, minmax(116px, 1fr)); min-width: 850px; gap: 8px; }
+.calday { min-height: 120px; padding: 10px; gap: 6px; }
+.dish { hyphens: manual; font-size: .86rem; padding: 5px 7px; }
+.calfoot { padding-top: 6px; }
+.calfoot b { color: var(--warn-ink); font-weight: 600; }
+.sday .sd-h { width: 100%; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.sday em, .sday .cat + em { hyphens: manual; }
+.paste .hint { margin: 4px 0 0; }
+.paste-in { display: grid; gap: 8px; }
+.rblock > h2 { margin-top: 26px; }
+@media (min-width: 900px) {
+  .calwrap { width: min(1080px, calc(100vw - 140px)); margin-left: 50%; transform: translateX(-50%); overflow-x: visible; padding: 0 0 6px; }
+  .cal { min-width: 0; }
+}
