@@ -55,8 +55,14 @@
   const QKEY = "an-queue";
   let queue = []; try { queue = JSON.parse(localStorage.getItem(QKEY)) || []; } catch { queue = []; }
   let busy = false, current = Promise.resolve();
+  function saved() {
+    const el = $("#sync"); if (!el) return;
+    el.hidden = false; el.classList.add("ok"); el.textContent = "Salvo";
+    clearTimeout(saved.t); saved.t = setTimeout(() => { el.classList.remove("ok"); syncBadge(); }, 1300);
+  }
   function syncBadge() {
     const el = $("#sync"); if (!el) return;
+    if (queue.length) el.classList.remove("ok"); else if (el.classList.contains("ok")) return;
     el.hidden = !queue.length;
     el.textContent = queue.length === 1 ? "1 alteração guardada, aguardando conexão" : `${queue.length} alterações guardadas, aguardando conexão`;
   }
@@ -67,6 +73,7 @@
     if (busy) return current;
     busy = true;
     current = (async () => {
+      let sent = 0;
       try { while (queue.length) {
         const j = queue[0]; let error = null;
         try {
@@ -77,8 +84,8 @@
           if (!navigator.onLine || /fetch|network|load failed/i.test(String(error.message || error))) break;
           console.error(error); toast("Uma alteração foi recusada pelo banco e não foi salva.");
         }
-        queue.shift(); saveQueue();
-      } } finally { busy = false; }
+        queue.shift(); saveQueue(); if (!error) sent++;
+      } } finally { busy = false; if (sent && !queue.length) saved(); }
     })();
     return current;
   }
@@ -140,7 +147,7 @@
       else throw r.error;
     });
     const has = (t, c) => !S[t][0] || c in S[t][0];
-    if (!has("recipes", "reviewed") || !has("ingredients", "paid") || !has("extras", "store") || !has("ingredients", "bought_by") || !has("ingredients", "can_freeze")) needsSetup = true;
+    if (!has("recipes", "reviewed") || !has("ingredients", "paid") || !has("extras", "store") || !has("ingredients", "bought_by") || !has("ingredients", "can_freeze") || !has("recipes", "brought")) needsSetup = true;
     applyQueue();
   }
   // ao voltar para o site: envia o que ficou na fila e busca o que os outros mudaram
@@ -188,10 +195,11 @@
       .sort((a, b) => a.date.localeCompare(b.date)).map(d => dayLabel(d));
     if (r.block === CAFE) { const n = S.days.filter(d => d.breakfast).length; return n ? { text: `${n} ${n === 1 ? "dia" : "dias"} com café`, idea: false } : { text: "nenhum dia com café marcado", idea: true }; }
     if (r.weekly) ds.unshift("semana toda");
+    if (r.brought && ds.length) ds.push("levada pronta");
     return ds.length ? { text: ds.join(", "), idea: false } : { text: "ideia, fora das compras", idea: true };
   }
   function shopping() {
-    const counts = new Map(S.recipes.map(r => [r.id, recipeCount(r)]));
+    const counts = new Map(S.recipes.map(r => [r.id, r.brought ? 0 : recipeCount(r)]));
     const tot = new Map();
     for (const it of S.recipe_items) {
       const c = counts.get(it.recipe_id) || 0; if (!c) continue;
@@ -208,7 +216,7 @@
     const m = new Map();
     for (const it of S.recipe_items) {
       const r = get("recipes", it.recipe_id);
-      if (!r || r.reviewed || !recipeCount(r)) continue;
+      if (!r || r.reviewed || r.brought || !recipeCount(r)) continue;
       const l = m.get(it.ingredient_id) || []; if (!l.includes(r.name)) l.push(r.name); m.set(it.ingredient_id, l);
     }
     return m;
@@ -220,6 +228,18 @@
     if (NOPL.has(w.toLowerCase()) || /s$/i.test(w)) return u;
     const p = /[rz]$/i.test(w) ? w + "es" : /[aeiouáéíóúãõâêô]$/i.test(w) ? w + "s" : w;
     return [p, ...rest].join(" ");
+  }
+  // gramas (ou ml) por xícara, só para o que tem medida conhecida
+  const DENS = [[/farinha/, 120], [/acucar mascavo/, 180], [/acucar de confeiteiro/, 120], [/acucar/, 200], [/manteiga|margarina/, 225], [/amido|maisena/, 120],
+    [/chocolate em po|cacau/, 90], [/aveia/, 90], [/arroz/, 185], [/leite condensado/, 300], [/leite|agua|creme de leite|oleo|azeite/, 240], [/mel/, 340],
+    [/queijo ralado|parmesao/, 100], [/gotas de chocolate|chocolate/, 170]];
+  const dens = ing => (ing && /^(g|ml)$/i.test(ing.unit || "") && (DENS.find(([re]) => re.test(norm(ing.name))) || [])[1]) || 0;
+  function cups(ing, qty) {
+    const d = dens(ing); if (!d || !qty) return "";
+    const n = qty / d;
+    if (n < 0.2) { const c = Math.round(n * 16); return c ? `cerca de ${c} ${c === 1 ? "colher de sopa" : "colheres de sopa"}` : ""; }
+    const q = Math.round(n * 4) / 4, w = Math.floor(q), f = { 0.25: "1/4", 0.5: "1/2", 0.75: "3/4" }[q - w] || "";
+    return `cerca de ${[w || "", f].filter(Boolean).join(" ")} ${q <= 1 ? "xícara" : "xícaras"}`;
   }
   function fmtQty(q, u) {
     if (!q) return "a definir";
@@ -248,7 +268,7 @@
     document.querySelectorAll("#sub button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY, shOld = view.querySelector(".sheet"), shY = shOld ? shOld.scrollTop : 0;
     revMap = unreviewed(); bulk.clear();
-    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-06.sql).</p>` : "") +
+    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-07.sql).</p>` : "") +
       ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
     window.scrollTo(0, y);
     const shNew = view.querySelector(".sheet"); if (shNew) shNew.scrollTop = shY;
@@ -286,7 +306,7 @@
     return `<div class="top-in">
       <div class="top-row"><button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg>Início</button>${client ? `<span class="acct">${esc(who)}<button class="link" data-go="cfg">Ajustes</button></span>` : `<span>modo local</span>`}</div>
       <h1>${TITLE[ui.tab]}</h1>
-      <p class="status">${esc(st.text)}</p>
+      <p class="status" aria-live="polite">${esc(st.text)}</p>
       <div class="meter" role="img" aria-label="${pct}% concluído"><i style="width:${pct}%"></i></div>
     </div>
     <svg class="wave" viewBox="0 0 1200 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 18 C 100 2, 200 34, 300 18 S 500 2, 600 18 S 800 34, 900 18 S 1100 2, 1200 18 V40 H0 Z"/></svg>`;
@@ -334,11 +354,13 @@
   /* listas: tudo que é comprar vai para Compras, tudo que é levar vai para Levar */
   const GROUPS = { when_buy: "Momento", sector: "Seção", store: "Loja", owner: "Pessoa", type: "Comida ou item" };
   const NONE = { when_buy: "A definir", sector: "Sem seção", store: "Sem loja definida", owner: "Sem responsável" };
-  const isDone = en => en.k === "i" ? !!en.r.bought : !!en.r.done;
-  const nameOf = en => en.k === "i" ? en.r.name : en.r.item;
+  const isDone = en => en.k === "i" ? !!en.r.bought : en.k === "r" ? !!en.r.brought_done : !!en.r.done;
+  const nameOf = en => en.k === "x" ? en.r.item : en.r.name;
+  const tableOf = en => en.k === "i" ? "ingredients" : en.k === "r" ? "recipes" : "extras";
   const buyEntries = tot => [...S.ingredients.filter(i => tot.has(i.id) && !isHome(i)).map(r => ({ k: "i", r })), ...S.extras.filter(e => e.buy).map(r => ({ k: "x", r }))];
-  const takeEntries = tot => [...S.ingredients.filter(i => tot.has(i.id) && isHome(i)).map(r => ({ k: "i", r })), ...S.extras.filter(e => !e.buy).map(r => ({ k: "x", r }))];
+  const takeEntries = tot => [...S.ingredients.filter(i => tot.has(i.id) && isHome(i)).map(r => ({ k: "i", r })), ...S.extras.filter(e => !e.buy).map(r => ({ k: "x", r })), ...S.recipes.filter(r => r.brought && recipeCount(r)).map(r => ({ k: "r", r }))];
   function keyOf(en, g) {
+    if (en.k === "r") return g === "origin" ? "Receitas levadas prontas" : g === "owner" ? (en.r.owner || NONE.owner) : g === "type" ? "Comida" : g === "sector" ? "Receita pronta" : NONE[g];
     if (g === "origin") {
       if (en.k === "i") return "Comida que vem de casa";
       const a = en.r.activity_id && get("activities", en.r.activity_id);
@@ -362,6 +384,14 @@
     if (f.type && keyOf(en, "type") !== f.type) return false;
     return true;
   }
+  function rRow(r) {
+    return `<li class="xrow ${r.brought_done ? "done" : ""}" data-name="${esc(norm(r.name))}">
+      ${tick("recipes", r.id, "brought_done", r.brought_done, "Separado: " + r.name)}
+      <button class="rowlink" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}<small>receita levada pronta</small></button><span></span>
+      <div class="xmeta">${pickBtn(r.id, r.owner)}</div>
+      ${pickPanel("recipes", r.id, r.owner)}
+    </li>`;
+  }
   const bulk = new Map(); // chave -> { name, list }, refeito a cada desenho
   function bulkPanel(key) {
     if (!ui.open.has("bulk-" + key)) return "";
@@ -382,7 +412,7 @@
         <${tag} class="grp-h"><button class="chev" data-act="open" data-key="${esc(key)}" aria-expanded="${open}">
           <span class="grp-n">${esc(k)}</span><span class="grp-c">${d} de ${l.length}</span><span class="grp-m" aria-hidden="true"><i style="width:${Math.round(100 * d / l.length)}%"></i></span></button></${tag}>
         ${open ? gtools(key, "Definir responsável do grupo", scope === "mb" || scope === "mt") : ""}
-        <ul class="shop xlist" data-closed="${open ? 0 : 1}" ${open ? "" : "hidden"}>${l.map(en => en.k === "i" ? vItem(en.r, tot.get(en.r.id), g) : xRow(en.r, g !== "origin")).join("")}</ul>
+        <ul class="shop xlist" data-closed="${open ? 0 : 1}" ${open ? "" : "hidden"}>${l.map(en => en.k === "i" ? vItem(en.r, tot.get(en.r.id), g) : en.k === "r" ? rRow(en.r) : xRow(en.r, g !== "origin")).join("")}</ul>
       </section>`;
     }).join("");
   }
@@ -479,6 +509,9 @@
   }
 
   function vRecipes() {
+    const cur = ui.rec && get("recipes", ui.rec);
+    if (cur && cur.block !== "Casa") return `<button class="btn back" data-act="${ui.back ? "back" : "rec-close"}">${ui.back ? "Voltar ao cardápio" : "Voltar às receitas"}</button>${vRecipe(cur, "page")}`;
+    ui.rec = null;
     const pass = r => (!ui.rBlock || r.block === ui.rBlock) && (!ui.rIn || (ui.rIn === "in") === !!recipeCount(r)) && (!ui.rRev || (ui.rRev === "ok") === !!r.reviewed);
     const add = ui.open.has("newrec");
     return `<div class="shopbar">
@@ -516,14 +549,13 @@
     });
   }
   function vRecipe(r, flat) {
-    const open = flat || ui.open.has(r.id), st = recipeStatus(r);
+    const open = !!flat, page = flat === "page", st = recipeStatus(r);
     const items = S.recipe_items.filter(i => i.recipe_id === r.id).sort(byPos);
     const qs = S.pendencias.filter(p => p.recipe_id === r.id).sort((a, b) => (a.done - b.done) || byPos(a, b)), qOpen = qs.filter(p => !p.done).length;
     let body = "";
     if (open) bulk.set("r-" + r.id, { name: r.name, list: items.map(i => get("ingredients", i.ingredient_id)).filter(Boolean).map(x => ({ k: "i", r: x })) });
     if (open) body = `<div class="rbody">
-      ${!flat && ui.back === r.id ? `<button class="btn back" data-act="back">Voltar ao cardápio</button>` : ""}
-      ${flat ? "" : `      <div class="grid2">
+      ${flat === true ? "" : `      <div class="grid2">
         <label class="fld">Nome${inp("recipes", r.id, "name", r.name)}</label>
         <label class="fld">Tipo<select data-act="set" data-t="recipes" data-id="${r.id}" data-f="block">${[...new Set(BLOCKS.concat(r.block))].map(b => `<option ${b === r.block ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></label>
         <label class="fld">Para quantas pessoas${inp("recipes", r.id, "serves", r.serves)}</label>
@@ -533,18 +565,25 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           return `<button type="button" class="dchip" data-act="toggle-day" data-r="${r.id}" data-d="${d.id}" aria-pressed="${on}" aria-label="${L.wk} ${L.dd} de ${L.mon}"><b>${L.dd}</b><small>${L.wk}</small></button>`; }).join("")}
           <button type="button" class="dchip wide" data-act="weekly" data-id="${r.id}" data-v="${r.weekly ? 0 : 1}" aria-pressed="${!!r.weekly}">Semana toda</button></div>
         <span class="note">Sem nenhum dia marcado, a receita fica como ideia e não entra nas compras.</span>
-        <button type="button" class="ghost" data-act="back">Ver no cardápio</button></div>`}`}
+        <button type="button" class="ghost" data-act="back">Ver no cardápio</button></div>
+      ${hasCol("recipes", "brought") ? `<div class="fld">${chk("recipes", r.id, "brought", r.brought, "Alguém leva pronto (os ingredientes saem das compras)")}
+        ${r.brought ? `<div class="pickwrap">${pickBtn(r.id, r.owner)}</div>${pickPanel("recipes", r.id, r.owner)}` : ""}</div>` : ""}`}`}
       <ul class="items">${items.map(it => {
         const g = get("ingredients", it.ingredient_id) || { name: "?", unit: "" };
-        const more = ui.open.has(it.id);
+        const more = ui.open.has(it.id), cp = cups(g, it.qty);
+        const tg = `${it.suggested && !r.reviewed ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "nao" ? `<span class="tag nov">não é vegetariano</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}`;
+        if (!more) return `<li class="ro"><button class="itro" data-act="open" data-key="${it.id}" aria-expanded="false" aria-label="Editar ${esc(g.name)}">
+          <span class="itn">${esc(g.name)}</span><b>${esc(fmtQty(it.qty, g.unit))}</b>
+          ${cp || it.note || tg ? `<span class="itx">${cp ? `<small>${cp}</small>` : ""}${it.note ? `<small>${esc(it.note)}</small>` : ""}${tg}</span>` : ""}</button></li>`;
         return `<li class="it">
           <input class="iname" data-act="repoint" data-id="${it.id}" value="${esc(g.name)}" list="dl-ings" aria-label="Ingrediente">
           <input class="iqty" data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="qty" data-num="1" value="${esc(nf.format(it.qty || 0).replace(/\./g, ""))}" inputmode="decimal" aria-label="Quantidade">
           <span class="unit">${esc(g.unit)}</span>
-          <button class="ghost" data-act="open" data-key="${it.id}" aria-expanded="${more}">${more ? "Menos" : "Mais"}</button>
+          <button class="ghost" data-act="open" data-key="${it.id}" aria-expanded="true">Fechar</button>
           <button class="x" data-act="del" data-t="recipe_items" data-id="${it.id}" aria-label="Tirar ${esc(g.name)}">×</button>
           <div class="tags">${it.suggested && !r.reviewed ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "nao" ? `<span class="tag nov">não é vegetariano</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}${it.note && !more ? `<span class="note">${esc(it.note)}</span>` : ""}</div>
           ${more ? `<div class="more">
+            ${dens(g) ? `<label class="fld">Em xícaras${cp ? ` (hoje: ${cp})` : ""}<input data-act="cups" data-id="${it.id}" inputmode="decimal" placeholder="ex.: 1,5"></label>` : ""}
             <label class="fld">Observação${inp("recipe_items", it.id, "note", it.note)}</label>
             ${g.id ? `<label class="fld">Seção do mercado${inp("ingredients", g.id, "sector", secOf(g), 'list="dl-sectors"')}</label>
             <label class="fld">Loja${inp("ingredients", g.id, "store", g.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
@@ -568,18 +607,20 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <div class="review ${r.reviewed ? "ok" : ""}">${r.reviewed
         ? `<span>Revisada${r.reviewed_by ? " por " + esc(r.reviewed_by) : ""}. Ingredientes e quantidades confirmados.</span><button class="ghost" data-act="review" data-id="${r.id}" data-v="0">Desfazer</button>`
         : qOpen ? `<span>Resolva ${qOpen === 1 ? "a dúvida acima" : `as ${qOpen} dúvidas acima`} antes de marcar como revisada.</span>`
-        : `<span>Conferiu ingredientes e quantidades? Só marque depois de ler a lista.</span><button class="btn primary" data-act="review" data-id="${r.id}" data-v="1">Marcar como revisada</button>`}</div>
-      ${flat ? "" : `      <p class="hint">Trocar o nome aqui troca o ingrediente só nesta receita. Para renomear em todas, use a aba Compras.</p>
+        : `<span>Leu a lista inteira?</span><button class="btn primary" data-act="review" data-id="${r.id}" data-v="1">Marcar como revisada</button>`}</div>
+      ${flat === true ? "" : `      <p class="hint">Toque num ingrediente para editar. Trocar o nome troca o ingrediente só nesta receita. Para renomear em todas, use a aba Compras.</p>
       <label class="fld">Modo de preparo e notas<textarea data-act="set" data-t="recipes" data-id="${r.id}" data-f="prep" rows="${Math.min(12, Math.max(3, (r.prep || "").split("\n").length + 1))}" placeholder="Passos, dicas, quem faz">${esc(r.prep)}</textarea></label>
       <button class="btn danger" data-act="del" data-t="recipes" data-id="${r.id}" data-confirm="Excluir a receita ${esc(r.name)}?">Excluir receita</button>`}
     </div>`;
-    if (flat) return `<article class="recipe open flat" id="r-${r.id}">${body}</article>`;
-    return `<article class="recipe ${open ? "open" : ""}" id="r-${r.id}" data-name="${esc(norm(r.name))}">
-      <button class="rhead chev" data-act="open" data-key="${r.id}" aria-expanded="${open}"><span>
+    const badges = `${r.brought ? `<span class="tag">leva pronto</span>` : ""}${qOpen ? `<span class="tag nov">${qOpen} ${qOpen === 1 ? "dúvida" : "dúvidas"}</span>` : ""}${st.idea ? "" : r.reviewed ? `<span class="tag ok">revisada</span>` : `<span class="tag sug">a revisar</span>`}`;
+    if (flat === true) return `<article class="recipe open flat" id="r-${r.id}">${body}</article>`;
+    if (page) return `<article class="recipe page" id="r-${r.id}"><header class="rpage"><h2>${esc(r.name)}</h2><p class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)}, ${items.length} ${items.length === 1 ? "item" : "itens"}</p><p class="rtags">${badges}</p></header>${body}</article>`;
+    return `<article class="recipe" id="r-${r.id}" data-name="${esc(norm(r.name))}">
+      <button class="rhead chev" data-act="rec-open" data-id="${r.id}"><span>
         <span class="rname">${esc(r.name)}</span>
         <span class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)}, ${items.length} ${items.length === 1 ? "item" : "itens"}</span></span>
-        ${qOpen ? `<span class="tag nov">${qOpen} ${qOpen === 1 ? "dúvida" : "dúvidas"}</span>` : ""}${st.idea ? "" : r.reviewed ? `<span class="tag ok">revisada</span>` : `<span class="tag sug">a revisar</span>`}
-      </button>${body}</article>`;
+        ${badges}
+      </button></article>`;
   }
 
   function vShop() {
@@ -676,8 +717,10 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <div><strong>${esc(p.subject)}</strong>${p.detail ? `<p>${esc(p.detail)}</p>` : ""}
         ${noComments ? area("pendencias", p.id, "answer", p.answer, p.kind === "Dúvida" ? "Resposta" : "Comentário") : thread(p)}
         ${!hasCol("pendencias", "recipe_id") ? "" : inRecipe ? `<button class="ghost" data-act="pend-out" data-id="${p.id}">Tirar da receita</button>`
-          : `<select class="mover" data-act="pend-move" data-id="${p.id}" aria-label="Mover ${esc(p.subject)} para uma receita"><option value="">Mover para uma receita…</option>${sug.length ? `<optgroup label="Sugestões">${sug.map(o).join("")}</optgroup>` : ""}<optgroup label="Todas">${others.map(o).join("")}</optgroup></select>`}
-        <button class="ghost" data-act="del" data-t="pendencias" data-id="${p.id}">Excluir</button></div></li>`;
+          : `<button class="ghost" data-act="open" data-key="lk-${p.id}" aria-expanded="${ui.open.has("lk-" + p.id)}">Vincular a receita</button>`}
+        <button class="ghost" data-act="del" data-t="pendencias" data-id="${p.id}">Excluir</button>
+        ${!inRecipe && ui.open.has("lk-" + p.id) ? `<div class="linker"><input type="search" class="lk-q" placeholder="Buscar receita" aria-label="Buscar receita">
+          <div class="lk-list">${[...sug, ...others].map(r => `<button class="tagbtn" data-act="pend-link" data-id="${p.id}" data-r="${r.id}" data-name="${esc(norm(r.name))}">${esc(r.name)}</button>`).join("")}</div></div>` : ""}</div></li>`;
   }
   function vPend() {
     const free = S.pendencias.filter(p => !p.recipe_id), linked = S.pendencias.length - free.length;
@@ -754,7 +797,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const buy = buyAll.filter(en => passF(en, { status: ui.mStatus, sector: ui.mSector })), take = takeAll.filter(en => passF(en, { status: ui.mStatus, sector: ui.mSector }));
     const cnt = l => `<small>${l.filter(isDone).length}/${l.length}</small>`, paid = paidSum(buyAll);
     return `<div class="shopbar">
-      <label class="fld">Lista de <select data-act="ui" data-f="me">${opts.map(n => `<option ${norm(n) === norm(me) ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
+      <div class="ptabs" role="group" aria-label="Lista de quem">${opts.map(n => `<button data-act="ui-set" data-f="me" data-v="${esc(n)}" aria-pressed="${norm(n) === norm(me)}">${esc(n)}</button>`).join("")}</div>
       ${seg3("mStatus", ["Tudo", "Falta", "Feito"])}
     </div>
     <div class="fchips" role="group" aria-label="Filtros">${pill("mSector", "Seção", sectors.map(x => [x, x]))}${ui.mSector || ui.mStatus ? `<button class="ghost" data-act="clear-mine">Limpar</button>` : ""}</div>
@@ -790,6 +833,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const next = WHEN.map(w => [w, buy.filter(en => keyOf(en, "when_buy") === w && !isDone(en)).length]).find(([, c]) => c);
     const act = S.recipes.filter(r => recipeCount(r) && r.block !== "Casa"), open = S.pendencias.filter(p => !p.done).length;
     const nextIds = new Set(next ? buy.filter(en => en.k === "i" && keyOf(en, "when_buy") === next[0] && !isDone(en)).map(en => en.r.id) : []);
+    const buyNo = buy.filter(en => !en.r.owner && !isDone(en)).length, takeNo = take.filter(en => !en.r.owner && !isDone(en)).length;
+    const vegMiss = days.filter(d => d.veg_guest && !d.veg_option && !S.menu.some(m => m.day_id === d.id && (get("recipes", m.recipe_id) || {}).block === VEG));
     const todo = new Map();
     S.recipe_items.forEach(it => { if (!nextIds.has(it.ingredient_id)) return; const r = get("recipes", it.recipe_id); if (r && !r.reviewed && recipeCount(r)) todo.set(r.id, (todo.get(r.id) || 0) + 1); });
     const cnt = (l, f) => l.filter(f).length;
@@ -807,6 +852,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     ${todo.size ? `<button class="todo chev" data-act="open" data-key="todo" aria-expanded="${ui.open.has("todo")}"><span>Revisar antes de comprar</span><b>${todo.size} ${todo.size === 1 ? "receita" : "receitas"}</b></button>
     ${ui.open.has("todo") ? `<p class="hint">Usam itens de "${esc(next[0])}" e ainda não foram revisadas.</p>
     <ul class="plain">${[...todo].map(([id, c]) => `<li><button class="rowlink" data-act="open-recipe" data-id="${id}">${esc(get("recipes", id).name)}<small>${c} ${c === 1 ? "item" : "itens"} nessa leva</small></button></li>`).join("")}</ul>` : ""}` : next ? `<p class="hint">Todas as receitas dessa leva já foram revisadas.</p>` : ""}
+    ${buyNo ? `<button class="todo" data-act="go-orphans" data-v="shop"><span>Compras sem responsável</span><b>${buyNo} ${buyNo === 1 ? "item" : "itens"}</b></button>` : ""}
+    ${takeNo ? `<button class="todo" data-act="go-orphans" data-v="take"><span>Para levar, sem responsável</span><b>${takeNo} ${takeNo === 1 ? "item" : "itens"}</b></button>` : ""}
+    ${vegMiss.length ? `<button class="todo" data-act="goto-day" data-id="${vegMiss[0].id}"><span>Falta opção vegetariana</span><b>${vegMiss.map(d => "dia " + dayLabel(d, true).dd).join(", ")}</b></button>` : ""}
     <div class="tiles">
       ${tile("shop", "compras", "Compras", cnt(buy, isDone), `/${buy.length}`, "itens comprados")}
       ${tile("take", "levar", "Levar", cnt(take, isDone), `/${take.length}`, "itens separados")}
@@ -851,7 +899,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       catch { return toast("Não foi possível baixar o gerador de planilha. Confira a conexão."); }
     }
     const X = window.XLSX, tot = shopping(), sn = b => (b ? "sim" : "não");
-    const itemRow = en => en.k === "i"
+    const itemRow = en => en.k === "r" ? [en.r.name + " (receita pronta)", "", "", "", "", "", en.r.owner || "", sn(en.r.brought_done), "", 0, ""] : en.k === "i"
       ? [en.r.name, (tot.get(en.r.id) || {}).qty || 0, en.r.unit, secOf(en.r), isHome(en.r) ? "" : whenOf(en.r), en.r.store || "", en.r.owner || "", sn(en.r.bought), en.r.bought_by || "", Number(en.r.paid) || 0, en.r.note || ""]
       : [en.r.item, "", "", keyOf(en, "sector"), "", en.r.store || "", en.r.owner || "", sn(en.r.done), en.r.bought_by || "", Number(en.r.paid) || 0, ""];
     const head = ["Item", "Quantidade", "Unidade", "Seção", "Momento", "Loja", "Responsável", "Feito", "Quem pagou", "Valor pago", "Observação"];
@@ -920,6 +968,10 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       const r = get("recipes", el.dataset.id); if (!r) return;
       if (!el.checked) S.menu.filter(m => m.recipe_id === r.id).forEach(m => { removeLocal("menu", m.id); persistDelete("menu", m.id); });
       toast(el.checked ? `${r.name} entrou no cardápio da semana.` : `${r.name} saiu do cardápio, de todos os dias e das compras.`); update("recipes", r.id, { weekly: el.checked }, true);
+    } else if (act === "cups") {
+      const it = get("recipe_items", el.dataset.id), ing = it && get("ingredients", it.ingredient_id), d = dens(ing), n = parseFloat(String(el.value).replace(",", "."));
+      if (!d || !(n > 0)) return render(true);
+      const q = Math.round(n * d); toast(`${nf.format(n)} ${n <= 1 ? "xícara" : "xícaras"} de ${ing.name}: ${q} ${ing.unit}.`); update("recipe_items", it.id, { qty: q, suggested: false }, true);
     } else if (act === "pend-move") {
       const r = get("recipes", el.value); if (!r) return;
       toast(`A pendência foi para a receita ${r.name}.`); update("pendencias", el.dataset.id, { recipe_id: r.id }, true);
@@ -940,6 +992,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const el = e.target;
     if (el.id === "shop-q") { ui.q = el.value; filterShop(); }
     if (el.id === "rec-q") { ui.rq = el.value; filterRecipes(); }
+    if (el.classList.contains("lk-q")) { const k = norm(el.value); el.parentNode.querySelectorAll("[data-name]").forEach(b => { b.hidden = !!k && !b.dataset.name.includes(k); }); }
     if (el.dataset.act === "ing-hint") {
       const u = el.form.elements.unit, g = findIng(el.value);
       u.value = g ? g.unit : u.disabled ? "" : u.value; u.disabled = !!g;
@@ -952,18 +1005,22 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const act = el.dataset.act;
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "back") { ui.back = null; go("menu"); }
-    else if (act === "open-recipe") { ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.open.add(el.dataset.id); render(true); const n = document.getElementById("r-" + el.dataset.id); if (n) n.scrollIntoView({ block: "start" }); }
+    else if (act === "open-recipe") { ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.rec = el.dataset.id; render(true); window.scrollTo(0, 0); }
+    else if (act === "rec-open") { ui.rec = el.dataset.id; ui.back = null; render(true); window.scrollTo(0, 0); }
+    else if (act === "rec-close") { ui.rec = null; render(true); }
+    else if (act === "go-orphans") { if (el.dataset.v === "take") { ui.tWho = "-"; go("take"); } else { ui.fWho = "-"; go("shop"); } }
+    else if (act === "pend-link") { const r = get("recipes", el.dataset.r); if (r) { ui.open.delete("lk-" + el.dataset.id); toast(`A pendência foi para a receita ${r.name}.`); update("pendencias", el.dataset.id, { recipe_id: r.id }, true); } }
     else if (act === "del") remove(el.dataset.t, el.dataset.id);
     else if (act === "bulk-owner") {
       const b = bulk.get(el.dataset.key), who2 = el.closest(".bulk").querySelector("select").value; if (!b) return;
       let n = 0;
-      b.list.forEach(en => { if (el.dataset.mode === "all" || !en.r.owner) { en.r.owner = who2; persistPatch(en.k === "i" ? "ingredients" : "extras", en.r.id, { owner: who2 }); n++; } });
+      b.list.forEach(en => { if (el.dataset.mode === "all" || !en.r.owner) { en.r.owner = who2; persistPatch(tableOf(en), en.r.id, { owner: who2 }); n++; } });
       ui.open.delete("bulk-" + el.dataset.key); render(true); toast(`${who2} agora é responsável por ${n} ${n === 1 ? "item" : "itens"}.`);
     }
     else if (act === "copy-list") {
       const b = bulk.get(el.dataset.key); if (!b) return;
       const tot = shopping(), todo2 = b.list.filter(en => !isDone(en));
-      const line = en => en.k === "i" ? `- ${en.r.name}: ${fmtQty((tot.get(en.r.id) || {}).qty, en.r.unit)}${en.r.buy_hint ? ` (${en.r.buy_hint})` : ""}` : `- ${en.r.item}`;
+      const line = en => en.k === "i" ? `- ${en.r.name}: ${fmtQty((tot.get(en.r.id) || {}).qty, en.r.unit)}${en.r.buy_hint ? ` (${en.r.buy_hint})` : ""}` : en.k === "r" ? `- ${en.r.name} (pronto)` : `- ${en.r.item}`;
       const text = `${b.name}\n${todo2.map(line).join("\n")}`;
       (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(`Lista copiada: ${todo2.length} ${todo2.length === 1 ? "item" : "itens"} que faltam.`), () => toast("Não foi possível copiar neste navegador."));
     }
@@ -999,7 +1056,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       add("recipe_items", { id: uid(), recipe_id: f.dataset.id, ingredient_id: ing.id, qty: num(v("qty")), suggested: false, veg: "", note: "", pos: nextPos("recipe_items") });
     } else if (kind === "new-recipe") {
       const r = { id: uid(), name: v("name"), block: v("block"), reviewed: false, reviewed_by: "", serves: "", weekly: false, notes: "", prep: "", pos: nextPos("recipes") };
-      ui.open.delete("newrec"); ui.open.add(r.id); add("recipes", r);
+      ui.open.delete("newrec"); ui.rec = r.id; add("recipes", r); window.scrollTo(0, 0);
       toast("Receita criada como ideia. Coloque num dia do cardápio para contar nas compras.");
       const n = document.getElementById("r-" + r.id); if (n) n.scrollIntoView({ block: "center" });
     } else if (kind === "add-pend") {
@@ -1023,12 +1080,14 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       let novos = 0, pos = nextPos("recipe_items");
       for (const l of lines) {
         let ing = findIng(l.name), qty = l.qty;
+        const cup = l.unit === "xícara" ? 1 : l.unit === "colher" ? 1 / 16 : 0;
+        if (cup) { const d = dens(ing || { name: l.name, unit: "g" }); if (d) { qty = Math.round(l.qty * cup * d); l.unit = "g"; } }
         if (ing) { const a = l.unit.toLowerCase(), b = String(ing.unit).toLowerCase(); if ((a === "kg" && b === "g") || (a === "l" && b === "ml")) qty *= 1000; if ((a === "g" && b === "kg") || (a === "ml" && b === "l")) qty /= 1000; }
         else { novos++; ing = { id: uid(), name: l.name, unit: l.unit || "un", sector: guessSector(l.name), when_buy: "Antes da viagem", buy_hint: "", bought: false, from_home: false, owner: "", note: "" }; S.ingredients.push(ing); persist("ingredients", ing); }
         const it = { id: uid(), recipe_id: r.id, ingredient_id: ing.id, qty, suggested: false, veg: "", note: "", pos: pos++ };
         S.recipe_items.push(it); persist("recipe_items", it);
       }
-      ui.open.delete("newrec"); ui.open.add(r.id); render(true);
+      ui.open.delete("newrec"); ui.rec = r.id; render(true); window.scrollTo(0, 0);
       toast(`Receita criada com ${lines.length} ingredientes${novos ? `, ${novos} novos` : ""}. Confira as quantidades.`);
     } else if (kind === "add-person") {
       const name = v("name");
@@ -1039,7 +1098,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   function go(t) {
     if (t === "plano") t = localStorage.getItem("an-plano") || "menu";
     if (!TABS.includes(t)) t = "start";
-    ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null; ui.sheet = null;
+    ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null; ui.sheet = null; ui.rec = null;
     if (SEC[t] === "plano") localStorage.setItem("an-plano", t);
     [...ui.open].filter(k => k.startsWith("own-")).forEach(k => ui.open.delete(k)); render(true); window.scrollTo(0, 0);
   }

@@ -29,6 +29,9 @@ create table if not exists an_recipes (
   prep text not null default '',
   reviewed boolean not null default false,
   reviewed_by text not null default '',
+  brought boolean not null default false,
+  owner text not null default '',
+  brought_done boolean not null default false,
   pos double precision not null default 0
 );
 
