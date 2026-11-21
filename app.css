@@ -402,3 +402,10 @@ h2.sec { font-size: 1.5rem; }
 .dish .cat { margin: 0 0 1px; }
 .day-body > .cat { margin: 8px 0 2px; }
 .btn.back { margin: 12px 0 0; }
+
+/* cartões dos dias: conteúdo sempre a partir do topo */
+.strip { align-items: stretch; }
+.sday { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; padding: 12px 10px; }
+.sday .sd-h { display: block; white-space: nowrap; }
+.sday em, .sday b + span + em { margin-top: 8px; }
+.sday .cat + em { margin-top: 2px; }
