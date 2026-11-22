@@ -11,7 +11,6 @@
   const PREFIX = "an_";
   const LS_KEY = "ano-novo-2627";
   const VEG = "Opção vegetariana";
-  const CAL_KIND = { "Acompanhamento": "side", "Opção vegetariana": "veg", "Sobremesa": "sweet" };
   const SIDE = "Acompanhamento";   // entra por dia, junto do prato principal
   const BLOCKS = ["Jantar", VEG, SIDE, "Café da manhã", "Snacks", "Sobremesa", "Bebidas", "Casa"];
   const FOOD = BLOCKS.filter(b => b !== "Casa");
@@ -299,13 +298,15 @@
 
   /* ---------- render ---------- */
   // rascunho = texto digitado num formulário que ainda não foi enviado (ou numa busca): sobrevive ao redesenho da tela
+  let noDraft = false;   // ligado por go(): ao trocar de aba, o que estava digitado na aba anterior não vai junto
   const draftKey = el => { const f = el.closest("form[data-form]"); return f ? [ui.tab, f.dataset.form, f.dataset.buy || "", f.dataset.id || f.dataset.pend || f.dataset.item || f.dataset.recipe || f.dataset.activity || "", el.name].join("|") : el.id || ""; };
   const draftEls = () => [...view.querySelectorAll("form[data-form]:not([data-sent]) input[name], form[data-form]:not([data-sent]) textarea[name], form[data-form]:not([data-sent]) select[name], #pend-q")].filter(el => el.type !== "checkbox" && el.type !== "file" && draftKey(el));
   function render(force) {
     const a = document.activeElement;
     if (!force && a && view.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "checkbox") { renderPending = true; return; }
     const dflt = el => el.tagName === "SELECT" ? (el.options[0] || {}).value : el.defaultValue;
-    const drafts = new Map(draftEls().filter(el => el.value && el.value !== dflt(el)).map(el => [draftKey(el), el.value]));
+    const drafts = noDraft ? new Map() : new Map(draftEls().filter(el => el.value && el.value !== dflt(el)).map(el => [draftKey(el), el.value]));
+    noDraft = false;
     renderPending = false;
     const sec = SEC[ui.tab];
     $("#app").dataset.sec = sec;
@@ -363,7 +364,7 @@
     return `<div class="top-in">
       <div class="top-row"><button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button><span class="brand">Ano Novo 26/27</span>${acct()}</div>
       <div class="top-main"><div class="top-t"><h1>${TITLE[ui.tab]}</h1>
-        <p class="status" aria-live="polite">${st.n ? `<b>${st.d}</b> de ${st.n} ${esc(st.text.replace(/^\d+ de \d+ /, "").replace(/\.$/, ""))}` : esc(st.text)}</p></div>
+        <p class="status" aria-live="polite">${st.n && /^\d+ de \d+ /.test(st.text) ? `<b>${st.d}</b> de ${st.n} ${esc(st.text.replace(/^\d+ de \d+ /, "").replace(/\.$/, ""))}` : esc(st.text.replace(/\.$/, ""))}</p></div>
         ${st.n ? `<svg class="ring" viewBox="0 0 48 48" role="img" aria-label="${pct}% concluído"><circle cx="24" cy="24" r="19"/>${pct ? `<circle class="on" cx="24" cy="24" r="19" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 24 24)"/>` : ""}<text x="24" y="28.5" text-anchor="middle">${pct}%</text></svg>` : ""}</div>
     </div>${HWAVE}`;
   }
@@ -394,7 +395,7 @@
     const chips = `${e.owner ? `<span class="tag who">${esc(e.owner)}</span>` : `<span class="tag sug">sem responsável</span>`}${e.buy ? `<span class="tag t-when">precisa comprar</span>` : ""}${a ? `<span class="tag t-act">${esc(a.name)}</span>` : ""}${e.buy && Number(e.paid) ? `<span class="tag ok">R$ ${money.format(Number(e.paid))}</span>` : ""}`;
     return `<li class="xrow ${e.done ? "done" : ""} ${open ? "open" : ""}" data-name="${esc(norm(e.item))}">
       ${tick("extras", e.id, "done", e.done, (e.buy ? "Comprado: " : "Separado: ") + e.item)}
-      <button class="xmain" data-act="open" data-key="x-${e.id}" aria-expanded="${open}" aria-label="${open ? "Fechar" : "Editar"} ${esc(e.item)}"><span class="xname">${esc(e.item)}</span><span class="chips">${chips}</span></button>
+      <button class="xmain" data-act="open" data-key="x-${e.id}" aria-expanded="${open}"><span class="xname">${esc(e.item)}</span><span class="chips">${chips}</span></button>
       ${open ? `<div class="xedit">
         <div class="xline">${inp("extras", e.id, "item", e.item, 'aria-label="Nome do item"')}<button class="x" data-act="del" data-t="extras" data-id="${e.id}" aria-label="Excluir ${esc(e.item)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></div>
         <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}
@@ -715,7 +716,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         <span class="rname">${esc(r.name)}</span>
         <span class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)}</span></span>
         ${qOpen ? `<span class="tag nov">${qOpen} ${qOpen === 1 ? "dúvida" : "dúvidas"}</span>` : ""}
-        ${r.brought ? `<span class="rprog ok" title="Levada pronta">pronta</span>` : CK() ? (n => `<span class="rprog ${items.length && n === items.length ? "ok" : ""}" aria-label="${n} de ${items.length} ingredientes conferidos">${n}/${items.length}</span>`)(items.filter(isChk).length) : (st.idea ? "" : isRev(r) ? `<span class="tag ok">conferida</span>` : `<span class="tag sug">a conferir</span>`)}
+        ${r.brought ? `<span class="rprog ok" title="Levada pronta">pronta</span>` : CK() ? (n => items.length ? `<span class="rprog ${n === items.length ? "ok" : ""}" aria-label="${n} de ${items.length} ingredientes conferidos">${n}/${items.length}</span>` : `<span class="rprog none">sem itens</span>`)(items.filter(isChk).length) : (st.idea ? "" : isRev(r) ? `<span class="tag ok">conferida</span>` : `<span class="tag sug">a conferir</span>`)}
       </button></article>`;
   }
 
@@ -765,7 +766,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
 
           i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : "",
           i.bought && i.bought_by ? `<span class="tag ok">pago por ${esc(i.bought_by)}</span>` : "",
-          g !== "sector" && secOf(i) ? `<span class="tag sec-${SECTORS.indexOf(secOf(i))}">${esc(secOf(i))}</span>` : "",
+          g !== "sector" && secOf(i) ? `<span class="tag ${SECTORS.includes(secOf(i)) ? "sec-" + SECTORS.indexOf(secOf(i)) : ""}">${esc(secOf(i))}</span>` : "",
           g !== "when_buy" && whenOf(i) && !isHome(i) ? `<span class="tag t-when">${esc(whenOf(i))}</span>` : "",
           bfCol() && isBF(i) && !isHome(i) && whenOf(i) !== BF ? `<span class="tag t-when">era Black Friday</span>` : "",
           isFreeze(i) && !isHome(i) ? `<span class="tag t-frz">congelar</span>` : "",
@@ -907,7 +908,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     <ul class="xlist">${plain.map(e => xRow(e)).join("") || `<li class="empty">Nada na lista ainda.</li>`}</ul>
     <div class="itools"><button class="btn sm" data-act="open" data-key="newgen" aria-expanded="${addX}">${addX ? "Fechar" : "+ Item"}</button></div>
     ${addX ? `<form class="newrow one" data-form="add-extra"><input name="item" placeholder="Item de uso geral" required><button class="btn">Adicionar</button></form>` : ""}
-    ${L0 ? `<section class="hdoubts">${doubtsBlock(L0, "h2")}<p class="hint">Perguntas sobre a casa: o que ela já tem, o que falta levar.</p></section>` : ""}`;
+    ${L0 && hasCol("pendencias", "recipe_id") ? `<section class="hdoubts">${doubtsBlock(L0, "h2")}<p class="hint">Perguntas sobre a casa: o que ela já tem, o que falta levar.</p></section>` : ""}`;
   }
 
   function vFun() {
@@ -1287,7 +1288,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const act = el.dataset.act;
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "back") { ui.back = null; go("menu"); }
-    else if (act === "open-recipe") { ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.rec = el.dataset.id; render(true); window.scrollTo(0, 0); }
+    else if (act === "open-recipe") { [...ui.open].filter(k => /^(cm-|ep-|ec-|lk-|own-|x-|q-|bulk-)/.test(k)).forEach(k => ui.open.delete(k)); ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.rec = el.dataset.id; render(true); window.scrollTo(0, 0); }
     else if (act === "scroll-right" || act === "scroll-left") { const sc = el.parentNode.firstElementChild; sc.scrollBy({ left: sc.clientWidth * 0.8 * (act === "scroll-left" ? -1 : 1), behavior: "smooth" }); }
     else if (act === "rec-open") { ui.rec = el.dataset.id; ui.back = null; render(true); window.scrollTo(0, 0); }
     else if (act === "rec-close") { ui.rec = null; render(true); }
@@ -1408,6 +1409,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     }
   });
   function go(t) {
+    noDraft = true;
     if (t === "plano") t = localStorage.getItem("an-plano") || "menu";
     if (!TABS.includes(t)) t = "start";
     ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null; ui.sheet = null; ui.fsheet = false; ui.rec = null; ui.open.delete("acct");
