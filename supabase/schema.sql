@@ -16,7 +16,9 @@ create table if not exists an_ingredients (
   paid numeric not null default 0,
   bought_by text not null default '',
   hint_qty numeric,
-  can_freeze boolean not null default false
+  can_freeze boolean not null default false,
+  bf boolean not null default false,
+  at_house boolean not null default false
 );
 
 create table if not exists an_recipes (
@@ -43,7 +45,8 @@ create table if not exists an_recipe_items (
   suggested boolean not null default false,
   veg text not null default '',
   note text not null default '',
-  pos double precision not null default 0
+  pos double precision not null default 0,
+  checked_by text not null default ''
 );
 
 create table if not exists an_days (

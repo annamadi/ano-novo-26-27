@@ -24,7 +24,6 @@
   const realWhen = i => { const w = WHEN_OLD[i.when_buy] || i.when_buy || ""; return bfCol() && w === BF ? "Antes da viagem" : w; };
   const isBF = i => bfCol() ? !!i.bf || i.when_buy === BF : i.when_buy === BF;
   const whenOf = i => bfCol() ? (isBF(i) && bfLive() ? BF : realWhen(i)) : (WHEN_OLD[i.when_buy] || i.when_buy || "");
-  const whenOpts = i => [...new Set((bfCol() ? WHEN.slice(1) : WHEN).concat(realWhen(i) || []))].map(w => `<option ${w === realWhen(i) ? "selected" : ""}>${esc(w)}</option>`).join("");
   const secOf = i => SEC_OLD[i.sector] || i.sector || "";
   const isFreeze = i => !!i.can_freeze || i.when_buy === "Antecipado, se congelar";
   const SECTORS = ["Mercearia", "Hortifruti", "Frios e laticínios", "Açougue e peixaria", "Padaria", "Bebidas", "Congelados", "Casa e descartáveis"];
@@ -39,7 +38,7 @@
     ${[...new Set(WHEN.slice(bfCol() ? 1 : 0).concat(buy ? w : []))].map(x => `<option value="w:${esc(x)}" ${buy && x === w ? "selected" : ""}>Comprar: ${esc(x.toLowerCase())}</option>`).join("")}
     <option value="take" ${isHome(i) && !isAtHouse(i) ? "selected" : ""}>Responsável leva de casa</option>
     ${hasHouse() ? `<option value="house" ${isAtHouse(i) ? "selected" : ""}>Já tem na casa</option>` : ""}</select></label>
-    ${buy && bfCol() ? `<div class="fld wide">${chk("ingredients", i.id, "bf", isBF(i), "Tentar comprar na Black Friday (27/11)")}</div>` : ""}
+    ${buy && bfCol() && (bfLive() || isBF(i)) ? `<div class="fld wide">${chk("ingredients", i.id, "bf", isBF(i), "Tentar comprar na Black Friday (27/11)")}</div>` : ""}
     ${isHome(i) && !isAtHouse(i) && !i.owner ? `<p class="err wide">Falta definir quem leva.</p>` : ""}`; };
   const S = Object.fromEntries(TABLES.map(t => [t, []]));
   const ui = { tab: localStorage.getItem("an-tab") || "start", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", fSector: "", fStore: "", fWhen: "", fType: "", tWho: "", tStatus: "", mStatus: "", mSector: "", pStatus: "todo", pRec: "", rq: "", rBlock: "", rIn: "", rRev: "", q: "", me: "", menuView: localStorage.getItem("an-menu-view") || "list" };
@@ -129,6 +128,8 @@
     const row = get(table, id); if (!row) return;
     const pay = { [table]: [row] };
     if (table === "recipes") { pay.recipe_items = S.recipe_items.filter(r => r.recipe_id === id); pay.menu = S.menu.filter(r => r.recipe_id === id); pay.pendencias = S.pendencias.filter(r => r.recipe_id === id); }
+    // a conversa vai junto: o banco apaga os comentários em cascata
+    const pids = new Set((table === "pendencias" ? [row] : pay.pendencias || []).map(p => p.id)); if (pids.size) pay.comments = S.comments.filter(c => pids.has(c.pend_id));
     if (table === "ingredients") pay.recipe_items = S.recipe_items.filter(r => r.ingredient_id === id);
     if (table === "activities") pay.extras = S.extras.filter(r => r.activity_id === id);
     let label = row.name || row.item || row.subject || (row.body ? `Comentário: ${String(row.body).slice(0, 40)}` : "");
@@ -232,7 +233,7 @@
   const CK = () => hasCol("recipe_items", "checked_by");
   const checkers = it => String(it.checked_by || "").split(",").map(x => x.trim()).filter(Boolean);
   const isChk = it => checkers(it).length > 0;
-  const isRev = r => { if (!CK()) return !!r.reviewed; const l = S.recipe_items.filter(i => i.recipe_id === r.id); return l.length > 0 && l.every(isChk); };
+  const isRev = r => { if (!CK()) return !!r.reviewed; if (r.brought) return true; const l = S.recipe_items.filter(i => i.recipe_id === r.id); return l.length > 0 && l.every(isChk); };
   const LEAF = `<svg class="leaf" viewBox="0 0 24 24" role="img" aria-label="opção vegetariana"><path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14M5 19l7-7"/></svg>`;
   const vegRows = r => S.recipe_items.filter(i => i.recipe_id === r.id && i.veg === "sim").sort(byPos);
   const vegItems = r => vegRows(r).map(i => (get("ingredients", i.ingredient_id) || {}).name).filter(Boolean);
@@ -250,7 +251,7 @@
     const m = new Map();
     for (const it of S.recipe_items) {
       const r = get("recipes", it.recipe_id);
-      if (!r || r.brought || !recipeCount(r) || (CK() ? isChk(it) : r.reviewed)) continue;
+      if (!r || r.brought || r.block === "Casa" || !recipeCount(r) || (CK() ? isChk(it) : r.reviewed)) continue;
       const l = m.get(it.ingredient_id) || []; if (!l.includes(r.name)) l.push(r.name); m.set(it.ingredient_id, l);
     }
     return m;
@@ -295,9 +296,13 @@
   window.addEventListener("scroll", onScroll, { passive: true });
 
   /* ---------- render ---------- */
+  // rascunho = texto digitado num formulário que ainda não foi enviado (ou numa busca): sobrevive ao redesenho da tela
+  const draftKey = el => { const f = el.closest("form[data-form]"); return f ? [f.dataset.form, f.dataset.id || f.dataset.pend || f.dataset.item || f.dataset.recipe || f.dataset.activity || "", el.name].join("|") : el.id || ""; };
+  const draftEls = () => [...view.querySelectorAll("form[data-form]:not([data-sent]) input[name], form[data-form]:not([data-sent]) textarea[name], #pend-q")].filter(el => el.type !== "checkbox" && draftKey(el));
   function render(force) {
     const a = document.activeElement;
     if (!force && a && view.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "checkbox") { renderPending = true; return; }
+    const drafts = new Map(draftEls().filter(el => el.value && el.value !== el.defaultValue).map(el => [draftKey(el), el.value]));
     renderPending = false;
     const sec = SEC[ui.tab];
     $("#app").dataset.sec = sec;
@@ -308,12 +313,13 @@
     document.querySelectorAll("#sub button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY, shOld = view.querySelector(".sheet"), shY = shOld ? shOld.scrollTop : 0;
     revMap = unreviewed(); bulk.clear();
-    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-09.sql).</p>` : "") +
-      ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
+    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado: rode, em ordem, os arquivos supabase/migration-02.sql a migration-09.sql que ainda não rodou.</p>` : "") +
+      ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])();
     window.scrollTo(0, y);
     const shNew = view.querySelector(".sheet"); if (shNew) shNew.scrollTop = shY;
     document.body.classList.toggle("locked", !!shNew);
     markScroll();
+    if (drafts.size) draftEls().forEach(el => { const v = drafts.get(draftKey(el)); if (v !== undefined && el.value === el.defaultValue) { el.value = v; if (el.id === "pend-q") el.dispatchEvent(new Event("input", { bubbles: true })); } });
     view.querySelectorAll("input[placeholder]:not([aria-label])").forEach(i => { if (!i.closest("label")) i.setAttribute("aria-label", i.placeholder); });
     $("#top").innerHTML = ui.tab === "start" ? "" : header();
     const hs = ui.tab === "start" ? null : headStat(shopping());
@@ -333,7 +339,7 @@
     if (t === "recipes") { const l = S.recipes.filter(r => recipeCount(r) && r.block !== "Casa"), d = c(l, isRev); return { d, n: l.length, text: `${d} de ${l.length} receitas do cardápio conferidas.` }; }
     if (t === "home") {
       const ids = new Set(S.recipes.filter(r => r.block === "Casa")), ings = new Set(S.recipe_items.filter(i => ids.has(get("recipes", i.recipe_id))).map(i => i.ingredient_id));
-      const a = S.ingredients.filter(i => ings.has(i.id)), b = S.extras.filter(e => !e.activity_id), d = c(a, i => i.bought) + c(b, e => e.done), n = a.length + b.length;
+      const a = S.ingredients.filter(i => ings.has(i.id)), b = S.extras.filter(e => !e.activity_id), d = c(a, i => i.bought || isAtHouse(i)) + c(b, e => e.done), n = a.length + b.length;
       return { d, n, text: `${d} de ${n} itens da casa resolvidos.` };
     }
     if (t === "fun") { const l = S.extras.filter(e => e.activity_id), d = c(l, e => e.done); return { d, n: l.length, text: l.length ? `${d} de ${l.length} itens das atividades resolvidos.` : `${S.activities.length} atividades, nenhuma com itens ainda.` }; }
@@ -359,7 +365,6 @@
     </div>`;
   }
   const tick = (t, id, f, val, label) => `<label class="tick"><input type="checkbox" data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" ${val ? "checked" : ""} aria-label="${esc(label)}"><span></span></label>`;
-  const datalists = () => "";
 
   const inp = (t, id, f, val, extra = "") => `<input data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" value="${esc(val)}" ${extra}>`;
   const chk = (t, id, f, val, label) => `<label class="chk"><input type="checkbox" data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" ${val ? "checked" : ""}><span>${label}</span></label>`;
@@ -461,7 +466,6 @@
       </section>`;
     }).join("");
   }
-  const sel = (f, opts) => `<select data-act="ui" data-f="${f}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${ui[f] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
   const pill = (f, label, opts) => `<select class="pill ${ui[f] ? "on" : ""}" data-act="ui" data-f="${f}" aria-label="Filtrar por ${esc(label.toLowerCase())}"><option value="">${esc(label)}</option>${opts.map(([v, l]) => `<option value="${esc(v)}" ${ui[f] === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
   const seg3 = (f, labels) => `<div class="seg" role="group" aria-label="Situação">${[["", labels[0]], ["todo", labels[1]], ["done", labels[2]]].map(([v, l]) => `<button data-act="ui-set" data-f="${f}" data-v="${v}" aria-pressed="${ui[f] === v}">${l}</button>`).join("")}</div>`;
   const people2 = () => [...peopleNames().map(n => [n, n]), ["-", "Sem responsável"]];
@@ -616,9 +620,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <ul class="items">${items.map(it => {
         const g = get("ingredients", it.ingredient_id) || { name: "?", unit: "" };
         const more = ui.open.has(it.id), cp = cups(g, it.qty);
-        const ck = CK(), by = checkers(it), mine = by.some(n => norm(n) === norm(who || "eu"));
+        const ck = CK() && flat !== true, by = checkers(it), mine = by.some(n => norm(n) === norm(who || "eu"));
         const tg = `${ck ? (by.length ? "" : it.suggested ? `<span class="tag sug">sugestão da IA</span>` : `<span class="tag new">novo</span>`) : it.suggested && !r.reviewed ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}${isAtHouse(g) ? `<span class="tag new">tem na casa</span>` : isHome(g) ? (g.owner ? `<span class="tag new">${esc(g.owner)} leva</span>` : `<span class="tag nov">leva de casa, sem responsável</span>`) : ""}`;
-        const ckBtn = ck ? `<button class="ckb" data-act="check" data-id="${it.id}" aria-pressed="${by.length > 0}" aria-label="${mine || (by.length && by.every(n => norm(n) === "caderno")) ? "Tirar a conferência de" : "Conferi"} ${esc(g.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : "";
+        const ckBtn = ck ? `<button class="ckb" data-act="check" data-id="${it.id}" aria-pressed="${by.length > 0}" aria-label="${mine || (by.length && by.every(n => norm(n) === "caderno")) ? "Tirar a conferência de" : by.length ? "Já conferido por outra pessoa. Conferir também" : "Conferi"} ${esc(g.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : "";
         if (!more) return `<li class="ro">${ckBtn}<button class="itro" data-act="open" data-key="${it.id}" aria-expanded="false" aria-label="Editar ${esc(g.name)}">
           <span class="itn">${esc(g.name)}${it.veg === "sim" ? LEAF : ""}</span><b>${esc(fmtQty(it.qty, g.unit))}</b>
           ${cp || it.note || tg ? `<span class="itx">${cp ? `<small>${cp}</small>` : ""}${it.note ? `<small>${esc(it.note)}</small>` : ""}${tg}</span>` : ""}</button></li>`;
@@ -672,7 +676,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         <label class="fld">Tipo<select data-act="set" data-t="recipes" data-id="${r.id}" data-f="block">${[...new Set(BLOCKS.concat(r.block))].map(b => `<option ${b === r.block ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></label>
         <label class="fld">Para quantas pessoas${inp("recipes", r.id, "serves", r.serves)}</label>
       </div>
-      <button class="btn danger" data-act="del" data-t="recipes" data-id="${r.id}" data-confirm="Excluir a receita ${esc(r.name)}?">Excluir receita</button>` : ""}`}
+      <button class="btn danger" data-act="del" data-t="recipes" data-id="${r.id}">Excluir receita</button>` : ""}`}
     </div>`;
     const badges = `${r.brought ? `<span class="tag">leva pronto</span>` : ""}${qOpen ? `<span class="tag nov">${qOpen} ${qOpen === 1 ? "dúvida" : "dúvidas"}</span>` : ""}${st.idea ? "" : isRev(r) ? `<span class="tag ok">conferida</span>` : `<span class="tag sug">a conferir</span>`}`;
     if (flat === true) return `<article class="recipe open flat" id="r-${r.id}">${body}</article>`;
@@ -698,7 +702,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ...(vals("type").length > 1 ? [["fType", "Comida ou item", vals("type").map(x => [x, x])]] : []), ["fRev", "Conferência", [["ok", "Já conferido"], ["todo", "A conferir"]]]];
     return `<div class="shopbar">
       <div class="srow"><input type="search" id="shop-q" placeholder="Buscar item" value="${esc(ui.q)}" aria-label="Buscar item">
-        <select class="grp" data-act="ui" data-f="group" aria-label="Agrupar por">${Object.entries(GROUPS).map(([v, l]) => `<option value="${esc(v)}" ${ui.group === v ? "selected" : ""}>Por ${esc(l.toLowerCase())}</option>`).join("")}</select></div>
+        <select class="grpsel" data-act="ui" data-f="group" aria-label="Agrupar por">${Object.entries(GROUPS).map(([v, l]) => `<option value="${esc(v)}" ${ui.group === v ? "selected" : ""}>Por ${esc(l.toLowerCase())}</option>`).join("")}</select></div>
       <div class="srow">${seg3("fStatus", ["Tudo", "Falta", "Comprado"])}
         <button class="btn sm fbtn ${active ? "on" : ""}" data-act="fsheet" data-v="1" aria-haspopup="dialog">Filtros${active ? ` (${active})` : ""}</button></div>
     </div>
@@ -716,7 +720,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     <p class="hint">O que vem de casa fica na aba Levar. Itens de Levar e Entretenimento marcados com "Precisa comprar" aparecem aqui.</p>
     ${unused.length ? `<details class="unused"><summary>Fora do cardápio (${unused.length})</summary>
       <p class="hint">Ingredientes que nenhuma receita ativa usa. As marcações ficam guardadas caso voltem.</p>
-      <ul class="plain">${unused.map(i => `<li><span>${esc(i.name)}</span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}" data-confirm="Excluir ${esc(i.name)} de vez, inclusive das receitas guardadas?">Excluir</button></li>`).join("")}</ul></details>` : ""}`;
+      <ul class="plain">${unused.map(i => `<li><span>${esc(i.name)}</span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}">Excluir</button></li>`).join("")}</ul></details>` : ""}`;
   }
   function vItem(i, e, g) {
     const open = ui.open.has(i.id), done = i.bought, pend = revMap.get(i.id);
@@ -753,7 +757,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         ${isHome(i) || !hasCol("ingredients", "can_freeze") ? "" : chk("ingredients", i.id, "can_freeze", isFreeze(i), "Dá para comprar antes e congelar")}
 
         <label class="fld">Observação${area("ingredients", i.id, "note", i.note, "Marca, tipo, onde achar")}</label>
-        ${pend ? `<p class="uses todo">Quantidade a conferir em: ${pend.map(esc).join(", ")}.</p>` : ""}
+        ${pend ? `<p class="uses warnline">Quantidade a conferir em: ${pend.map(esc).join(", ")}.</p>` : ""}
         <p class="uses">Usado em:</p>
         <ul class="useslist">${e.uses.map(u => `<li><button class="ghost" data-act="open-recipe" data-id="${u.id}">${esc(u.name)}</button><span>${esc(fmtQty(u.qty, i.unit))}${u.times > 1 ? " × " + u.times : ""}</span></li>`).join("")}</ul>
       </div>` : (i.note ? `<p class="inote">${esc(i.note)}</p>` : "")}
@@ -765,7 +769,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   const mentionRe = () => { const n = peopleNames().sort((a, b) => b.length - a.length).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")); return n.length ? new RegExp("@(" + n.join("|") + ")(?![\\p{L}\\d])", "giu") : null; };
   const rich = t => { const re = mentionRe(), e = esc(t); return re ? e.replace(re, m => `<b class="mention">${m}</b>`) : e; };
   const pendText = p => [p.subject, p.detail, ...S.comments.filter(c => c.pend_id === p.id).map(c => c.body)].join(" ");
-  const tagsMe = p => { const me = meName(); return !!me && !p.done && norm(pendText(p)).includes("@" + norm(me)); };
+  const myName = () => client ? (peopleNames().find(n => norm(n) === norm(who)) || who || "") : meName();
+  const tagsMe = p => { const me = norm(myName()), re = mentionRe(); return !!me && !!re && !p.done && [...pendText(p).matchAll(re)].some(m => norm(m[1]) === me); };
   function thread(p) {
     const cs = S.comments.filter(c => c.pend_id === p.id).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
     return `<div class="thread">
@@ -774,7 +779,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         if (ui.open.has("ec-" + c.id)) return `<form class="newrow" data-form="edit-comment" data-id="${c.id}"><input name="body" value="${esc(c.body)}" required aria-label="Editar comentário"><button class="btn">Salvar</button><button type="button" class="ghost" data-act="open" data-key="ec-${c.id}">Cancelar</button></form>`;
         return `<div class="msg"><p><b>${esc(c.author || "Sem nome")} <small>${fmtWhen(c.created_at)}</small></b>${rich(c.body)}</p>${own ? `<span class="acts">
           <button class="icon" data-act="open" data-key="ec-${c.id}" aria-label="Editar comentário"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button>
-          <button class="icon" data-act="del" data-t="comments" data-id="${c.id}" data-confirm="Apagar este comentário?" aria-label="Apagar comentário"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></span>` : ""}</div>`; }).join("")}
+          <button class="icon" data-act="del" data-t="comments" data-id="${c.id}" aria-label="Apagar comentário"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></span>` : ""}</div>`; }).join("")}
       <form class="newrow" data-form="add-comment" data-pend="${p.id}"><input name="body" placeholder="Comentar (use @ para marcar alguém)" data-sug="mention" autocomplete="off" required aria-label="Comentar em ${esc(p.subject)}"><button class="btn">Enviar</button></form></div>`;
   }
   function pendRow(p, inRecipe) {
@@ -867,7 +872,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           <h3>O que precisa</h3>
           <ul class="xlist">${items.map(e => xRow(e)).join("") || `<li class="empty">Nada ainda.</li>`}</ul>
           <form class="newrow" data-form="add-extra" data-activity="${a.id}"><input name="item" placeholder="Item para comprar ou levar" required><button class="btn">Adicionar</button></form>
-          <button class="btn danger" data-act="del" data-t="activities" data-id="${a.id}" data-confirm="Excluir a atividade ${esc(a.name)} e os itens dela?">Excluir atividade</button>
+          <button class="btn danger" data-act="del" data-t="activities" data-id="${a.id}">Excluir atividade</button>
         </div>` : ""}</article>`;
     }).join("") || `<p class="empty">Nenhuma atividade ainda. Crie a primeira acima.</p>`}`;
   }
@@ -899,7 +904,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   function vCfg() {
     const people = `<h2>Pessoas do grupo</h2>
       <p class="hint">São os nomes que aparecem nas opções de responsável.</p>
-      <ul class="plain">${[...S.people].sort(byPos).map(p => `<li><span>${esc(p.name)}</span><button class="x" data-act="del" data-t="people" data-id="${p.id}" data-confirm="Tirar ${esc(p.name)} das opções de responsável?" aria-label="Tirar ${esc(p.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></li>`).join("")}</ul>
+      <ul class="plain">${[...S.people].sort(byPos).map(p => `<li><span>${esc(p.name)}</span><button class="x" data-act="del" data-t="people" data-id="${p.id}" aria-label="Tirar ${esc(p.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></li>`).join("")}</ul>
       <form class="newrow" data-form="add-person"><input name="name" placeholder="Nome da pessoa" required><button class="btn">Adicionar pessoa</button></form>`;
     return `${people}
     <h2>Cópia e exportação</h2>
@@ -914,7 +919,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   const MORE = `<button class="more-btn" data-act="scroll-right" aria-label="Ver mais"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button><button class="more-btn back" data-act="scroll-left" aria-label="Voltar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>`;
   function markScroll() {
     view.querySelectorAll(".hbox").forEach(b => {
-      const sc = b.firstElementChild, upd = () => { b.classList.toggle("more", sc.scrollWidth - sc.clientWidth - sc.scrollLeft > 8); b.classList.toggle("less", sc.scrollLeft > 24); };
+      const sc = b.firstElementChild, upd = () => { b.classList.toggle("can-next", sc.scrollWidth - sc.clientWidth - sc.scrollLeft > 8); b.classList.toggle("can-prev", sc.scrollLeft > 24); };
       upd(); sc.addEventListener("scroll", upd, { passive: true });
     });
   }
@@ -992,15 +997,15 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     }
     const X = window.XLSX, tot = shopping(), sn = b => (b ? "sim" : "não");
     const itemRow = en => en.k === "r" ? [en.r.name + " (receita pronta)", "", "", "", "", "", en.r.owner || "", sn(en.r.brought_done), "", 0, ""] : en.k === "i"
-      ? [en.r.name, (tot.get(en.r.id) || {}).qty || 0, en.r.unit, secOf(en.r), isHome(en.r) ? "" : whenOf(en.r), en.r.store || "", en.r.owner || "", sn(en.r.bought), en.r.bought_by || "", Number(en.r.paid) || 0, en.r.note || ""]
+      ? [en.r.name, (tot.get(en.r.id) || {}).qty || 0, en.r.unit, secOf(en.r), isHome(en.r) ? "" : realWhen(en.r), en.r.store || "", en.r.owner || "", sn(en.r.bought), en.r.bought_by || "", Number(en.r.paid) || 0, en.r.note || "", sn(isBF(en.r))]
       : [en.r.item, "", "", keyOf(en, "sector"), "", en.r.store || "", en.r.owner || "", sn(en.r.done), en.r.bought_by || "", Number(en.r.paid) || 0, ""];
-    const head = ["Item", "Quantidade", "Unidade", "Seção", "Momento", "Loja", "Responsável", "Feito", "Quem pagou", "Valor pago", "Observação"];
+    const head = ["Item", "Quantidade", "Unidade", "Seção", "Momento", "Loja", "Responsável", "Feito", "Quem pagou", "Valor pago", "Observação", "Black Friday"];
     const days = [...S.days].sort((a, b) => a.date.localeCompare(b.date));
     const sheets = {
       "Compras": [head, ...buyEntries(tot).map(itemRow)],
       "Levar": [head, ...takeEntries(tot).map(itemRow)],
       "Cardápio": [["Dia", "Pratos", "Pessoas", "Precisa de opção vegetariana", "Café da manhã", "Observações"], ...days.map(d => [dayLabel(d), byCat(S.menu.filter(m => m.day_id === d.id).map(m => get("recipes", m.recipe_id)).filter(Boolean)).map(([b, l]) => `${b}: ${l.map(r => r.name).join(", ")}`).join("; "), d.people, sn(d.veg_guest), sn(d.breakfast), d.notes || ""])],
-      "Receitas": [["Receita", "Tipo", "No cardápio", "Revisada", "Ingrediente", "Quantidade", "Unidade", "Observação"], ...S.recipes.slice().sort(byPos).flatMap(r => S.recipe_items.filter(i => i.recipe_id === r.id).sort(byPos).map(i => { const g = get("ingredients", i.ingredient_id) || {}; return [r.name, r.block, recipeStatus(r).text, sn(r.reviewed), g.name || "", i.qty || 0, g.unit || "", i.note || ""]; }))],
+      "Receitas": [["Receita", "Tipo", "No cardápio", "Receita conferida", "Ingrediente", "Quantidade", "Unidade", "Observação", "Conferido por", "Alternativa vegetariana", "De onde vem"], ...S.recipes.slice().sort(byPos).flatMap(r => S.recipe_items.filter(i => i.recipe_id === r.id).sort(byPos).map(i => { const g = get("ingredients", i.ingredient_id) || {}; return [r.name, r.block, recipeStatus(r).text, sn(isRev(r)), g.name || "", i.qty || 0, g.unit || "", i.note || "", checkers(i).join(", "), sn(i.veg === "sim"), isAtHouse(g) ? "Já tem na casa" : isHome(g) ? "Responsável leva" : "Comprar"]; }))],
       "Pendências": [["Tipo", "Assunto", "Detalhe", "Resolvida", "Receita", "Conversa"], ...S.pendencias.map(p => [p.kind, p.subject, p.detail, sn(p.done), (get("recipes", p.recipe_id) || {}).name || "", [p.answer, ...S.comments.filter(c => c.pend_id === p.id).map(c => `${c.author}: ${c.body}`)].filter(Boolean).join(" | ")])],
     };
     const wb = X.utils.book_new();
@@ -1056,7 +1061,6 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       if (t === "extras" && f === "done" && cur.buy && hasCol(t, "bought_by")) patch.bought_by = v ? (cur.bought_by || who) : "";
       if (t === "ingredients" && f === "buy_hint" && hasCol(t, "hint_qty")) patch.hint_qty = (shopping().get(id) || {}).qty ?? null;
       if (t === "ingredients" && f === "bf" && !v && (get(t, id) || {}).when_buy === BF) patch.when_buy = "Antes da viagem";
-      if (t === "ingredients" && f === "from_home" && !v && (get(t, id) || {}).when_buy === HOME) patch.when_buy = "A confirmar";
       if (ui.tab !== "fun" && ((t === "extras" && f === "buy") || (t === "ingredients" && f === "from_home"))) toast((t === "extras") === !!v ? "Foi para a lista de compras." : "Foi para a lista de levar.");
       update(t, id, patch, force);
     } else if (act === "owner") {
@@ -1077,10 +1081,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     } else if (act === "cups") {
       const it = get("recipe_items", el.dataset.id), ing = it && get("ingredients", it.ingredient_id), d = dens(ing), n = parseFloat(String(el.value).replace(",", "."));
       if (!d || !(n > 0)) return render(true);
-      const q = Math.round(n * d); toast(`${nf.format(n)} ${n <= 1 ? "xícara" : "xícaras"} de ${ing.name}: ${q} ${ing.unit}.`); update("recipe_items", it.id, { qty: q, suggested: false }, true);
-    } else if (act === "pend-move") {
-      const r = get("recipes", el.value); if (!r) return;
-      toast(`A pendência foi para a receita ${r.name}.`); update("pendencias", el.dataset.id, { recipe_id: r.id }, true);
+      const q = Math.round(n * d); toast(`${nf.format(n)} ${n <= 1 ? "xícara" : "xícaras"} de ${ing.name}: ${q} ${ing.unit}.`); update("recipe_items", it.id, CK() ? { qty: q } : { qty: q, suggested: false }, true);
     } else if (act === "repoint") {
       const it = get("recipe_items", el.dataset.id), name = el.value.trim();
       if (!it || !name) return render(true);
@@ -1182,7 +1183,6 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     else if (act === "scroll-right" || act === "scroll-left") { const sc = el.parentNode.firstElementChild; sc.scrollBy({ left: sc.clientWidth * 0.8 * (act === "scroll-left" ? -1 : 1), behavior: "smooth" }); }
     else if (act === "rec-open") { ui.rec = el.dataset.id; ui.back = null; render(true); window.scrollTo(0, 0); }
     else if (act === "rec-close") { ui.rec = null; render(true); }
-    else if (act === "go-orphans") { if (el.dataset.v === "take") { ui.tWho = "-"; go("take"); } else { ui.fWho = "-"; go("shop"); } }
     else if (act === "pend-link") { const r = get("recipes", el.dataset.r); if (r) { ui.open.delete("lk-" + el.dataset.id); toast(`A pendência foi para a receita ${r.name}.`); update("pendencias", el.dataset.id, { recipe_id: r.id }, true); } }
     else if (act === "del") remove(el.dataset.t, el.dataset.id);
     else if (act === "bulk-owner") {
@@ -1193,10 +1193,12 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     }
     else if (act === "copy-list") {
       const b = bulk.get(el.dataset.key); if (!b) return;
-      const tot = shopping(), todo2 = b.list.filter(en => !isDone(en));
-      const line = en => en.k === "i" ? `- ${en.r.name}: ${fmtQty((tot.get(en.r.id) || {}).qty, en.r.unit)}${en.r.buy_hint ? ` (${en.r.buy_hint})` : ""}` : en.k === "r" ? `- ${en.r.name} (pronto)` : `- ${en.r.item}`;
+      const tot = shopping(), rid = el.dataset.key.startsWith("r-") ? el.dataset.key.slice(2) : null;
+      const todo2 = rid ? b.list : b.list.filter(en => !isDone(en));
+      const qtyOf = en => rid ? S.recipe_items.filter(i => i.recipe_id === rid && i.ingredient_id === en.r.id).reduce((a, i) => a + (Number(i.qty) || 0), 0) : (tot.get(en.r.id) || {}).qty;
+      const line = en => en.k === "i" ? `- ${en.r.name}: ${fmtQty(qtyOf(en), en.r.unit)}${en.r.buy_hint ? ` (${en.r.buy_hint})` : ""}` : en.k === "r" ? `- ${en.r.name} (pronto)` : `- ${en.r.item}`;
       const text = `${b.name}\n${todo2.map(line).join("\n")}`;
-      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(`Lista copiada: ${todo2.length} ${todo2.length === 1 ? "item" : "itens"} que faltam.`), () => toast("Não foi possível copiar neste navegador."));
+      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(`Lista copiada: ${todo2.length} ${todo2.length === 1 ? "item" : "itens"}${rid ? "" : " que faltam"}.`), () => toast("Não foi possível copiar neste navegador."));
     }
     else if (act === "backup") {
       const a = document.createElement("a");
@@ -1233,7 +1235,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   });
   view.addEventListener("submit", e => {
     e.preventDefault();
-    const f = e.target, kind = f.dataset.form, v = n => f.querySelector(`[name="${n}"]`).value.trim();
+    const f = e.target; f.dataset.sent = "1";
+    const kind = f.dataset.form, v = n => f.querySelector(`[name="${n}"]`).value.trim();
     if (kind === "add-item") {
       let unit = v("unit"), qty = num(v("qty")); const cu = cupUnit(unit), old = findIng(v("name"));
       if (cu) {
@@ -1297,6 +1300,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (t === "plano") t = localStorage.getItem("an-plano") || "menu";
     if (!TABS.includes(t)) t = "start";
     ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null; ui.sheet = null; ui.fsheet = false; ui.rec = null; ui.open.delete("acct");
+    [...ui.open].filter(k => /^(q-|ep-|ec-|lk-|bulk-|add-|new)/.test(k)).forEach(k => ui.open.delete(k));
     if (SEC[t] === "plano") localStorage.setItem("an-plano", t);
     [...ui.open].filter(k => k.startsWith("own-")).forEach(k => ui.open.delete(k)); render(true); window.scrollTo(0, 0);
   }
