@@ -630,3 +630,7 @@ body.scrolled .mini { transform: none; visibility: visible; }
 .rtitle .icon[aria-expanded="true"] { background: var(--ink); color: #fff; }
 .rdetbox { margin: 12px 0 4px; padding: 12px 14px; border-radius: 12px; background: var(--mist); }
 .rdetbox .btn.danger { margin-top: 8px; }
+
+/* separadores por tipo na lista de ingredientes */
+.items .ksep { list-style: none; margin: 14px 0 0; padding: 0 0 2px; font-size: .78rem; font-weight: 700; color: var(--gold-deep); border-bottom: 1px solid var(--line); }
+.items .ksep:first-child { margin-top: 4px; }

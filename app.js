@@ -599,6 +599,18 @@
       sec.hidden = !hit;
     });
   }
+  // tipo do ingrediente dentro da receita, só para ordenar e separar a lista na conferência
+  const KIND_LABEL = ["Principais", "Extras", "Temperos", "Molhos e condimentos", "Outros"];
+  const KIND_RE = [
+    [4, /carvao|acendedor|copinho|filtro de papel|papel |guardanapo|detergente|saco de lixo|^gelo$/],
+    [3, /ketchup|mostarda|maionese|shoyu|molho|tare$|azeite|^oleo|vinagre|extrato/],
+    [2, /^sal$|sal grosso|flor de sal|pimenta|paprica|cominho|chilli|oregano|^alho$|coentro|cebolinha|^salsa|louro|canela|baunilha|fermento|bicarbonato|^gergelim|furikake|wasabi|gengibre|tempero/],
+    [1, /batata palha|milho \(lata\)|crispy|granulado|avela|gotas de chocolate|^bacon/]];
+  function ingKind(name, recipeName) {
+    const k = norm(name), first = k.split(/[\s(]/)[0];
+    if (first.length >= 4 && norm(recipeName).includes(first)) return 0;   // maionese na "Maionese de batata" é o principal
+    return (KIND_RE.find(([, re]) => re.test(k)) || [0])[0];
+  }
   function vRecipe(r, flat) {
     const detBlock = `<div class="rdetbox"><div class="grid2">
         <label class="fld">Nome${inp("recipes", r.id, "name", r.name)}</label>
@@ -607,7 +619,9 @@
       </div>
       <button class="btn danger" data-act="del" data-t="recipes" data-id="${r.id}">Excluir receita</button></div>`;
     const open = !!flat, page = flat === "page", st = recipeStatus(r);
-    const items = S.recipe_items.filter(i => i.recipe_id === r.id).sort(byPos);
+    const kOf = i => flat === true ? 0 : ingKind((get("ingredients", i.ingredient_id) || {}).name, r.name);
+    const items = S.recipe_items.filter(i => i.recipe_id === r.id).sort((a, b) => kOf(a) - kOf(b) || byPos(a, b));
+    const kinds = new Set(items.map(kOf));
     const qs = S.pendencias.filter(p => p.recipe_id === r.id).sort((a, b) => (a.done - b.done) || byPos(a, b)), qOpen = qs.filter(p => !p.done).length;
     let body = "";
     if (open) bulk.set("r-" + r.id, { name: r.name, list: items.map(i => get("ingredients", i.ingredient_id)).filter(Boolean).map(x => ({ k: "i", r: x })) });
@@ -624,16 +638,17 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <section class="rsec"><h3>${flat === true ? "Itens" : "Ingredientes"} <small>${CK() && flat !== true && items.length ? `${items.filter(isChk).length} de ${items.length} conferidos` : items.length}</small></h3>
       ${flat === true || !items.length ? "" : `<p class="hint">${CK() ? "Marque o que você conferiu (ingrediente e quantidade). Toque no nome para editar." : "Toque num ingrediente para editar."}</p>`}
       ${flat !== true && vegItems(r).length ? `<p class="vegline">${LEAF}<span>${esc(vegItems(r).join(", "))}</span></p>` : ""}
-      <ul class="items">${items.map(it => {
+      <ul class="items">${items.map((it, idx) => {
         const g = get("ingredients", it.ingredient_id) || { name: "?", unit: "" };
+        const sep = kinds.size > 1 && (idx === 0 || kOf(items[idx - 1]) !== kOf(it)) ? `<li class="ksep">${KIND_LABEL[kOf(it)]}</li>` : "";
         const more = ui.open.has(it.id), cp = cups(g, it.qty);
         const ck = CK() && flat !== true, by = checkers(it), mine = by.some(n => norm(n) === norm(who || "eu"));
         const tg = `${ck ? (by.length ? "" : it.suggested ? `<span class="tag sug">sugestão da IA</span>` : `<span class="tag new">novo</span>`) : it.suggested && !r.reviewed ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}${isAtHouse(g) ? `<span class="tag new">tem na casa</span>` : isHome(g) ? (g.owner ? `<span class="tag new">${esc(g.owner)} leva</span>` : `<span class="tag nov">leva de casa, sem responsável</span>`) : ""}`;
         const ckBtn = ck ? `<button class="ckb" data-act="check" data-id="${it.id}" aria-pressed="${by.length > 0}" aria-label="${mine || (by.length && by.every(n => norm(n) === "caderno")) ? "Tirar a conferência de" : by.length ? "Já conferido por outra pessoa. Conferir também" : "Conferi"} ${esc(g.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : "";
-        if (!more) return `<li class="ro">${ckBtn}<button class="itro" data-act="open" data-key="${it.id}" aria-expanded="false" aria-label="Editar ${esc(g.name)}">
+        if (!more) return `${sep}<li class="ro">${ckBtn}<button class="itro" data-act="open" data-key="${it.id}" aria-expanded="false" aria-label="Editar ${esc(g.name)}">
           <span class="itn">${esc(g.name)}${it.veg === "sim" ? LEAF : ""}</span><b>${esc(fmtQty(it.qty, g.unit))}</b>
           ${cp || it.note || tg ? `<span class="itx">${cp ? `<small>${cp}</small>` : ""}${it.note ? `<small>${esc(it.note)}</small>` : ""}${tg}</span>` : ""}</button></li>`;
-        return `<li class="it">
+        return `${sep}<li class="it">
           <div class="ithead">${ckBtn}<button class="itro on" data-act="open" data-key="${it.id}" aria-expanded="true" aria-label="Fechar ${esc(g.name)}"><span class="itn">${esc(g.name)}${it.veg === "sim" ? LEAF : ""}</span><b>${esc(fmtQty(it.qty, g.unit))}</b></button></div>
           <div class="itedit">
             <input class="iname" data-act="repoint" data-id="${it.id}" value="${esc(g.name)}" data-sug="ings" autocomplete="off" aria-label="Ingrediente">
