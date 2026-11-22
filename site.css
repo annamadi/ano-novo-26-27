@@ -554,3 +554,34 @@ select.pill.on { background-color: var(--ink); border-color: var(--ink); }
 #pend-q { width: 100%; margin: 4px 0 2px; }
 .pgrp[hidden] { display: none; }
 .pend li[hidden] { display: none; }
+
+/* rodada 3: cabeçalho, filtros em sheet, lixeira */
+.top { padding: 6px 16px 18px; }
+.top-row { min-height: 40px; font-size: .86rem; font-weight: 500; color: rgba(255, 255, 255, .78); border-bottom: 1px solid rgba(255, 255, 255, .14); }
+.top-row .link { font-weight: 600; color: #fff; }
+.acct { gap: 4px; }
+.top-main { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 14px 0 10px; }
+.top h1 { font: 500 clamp(1.9rem, 8.4vw, 2.6rem)/1.05 var(--display); letter-spacing: -.01em; margin: 0; }
+.top-n { margin: 0; font: 500 1.05rem/1 var(--display); color: var(--gold-soft); white-space: nowrap; }
+.top-n b { font-weight: 500; font-size: 1.9rem; color: #fff; }
+.top .meter { max-width: none; height: 4px; }
+.top .status { margin: 8px 0 0; font-size: .88rem; font-weight: 500; color: rgba(255, 255, 255, .78); max-width: none; }
+.top .status span[aria-hidden]::first-letter { text-transform: uppercase; }
+.top .wave { display: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.x { display: grid; place-items: center; }
+.x svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.it { grid-template-columns: 1fr 76px 52px 44px; }
+.more .done { grid-column: 1 / -1; justify-self: end; margin-top: 4px; }
+.srow .seg { flex: 1 1 auto; display: flex; margin: 0; padding: 2px; }
+.srow .seg button { flex: 1; min-height: 36px; padding: 0 6px; font-size: .92rem; }
+.fbtn { flex: 0 0 auto; min-height: 40px; }
+.fbtn.on { background: var(--ink); color: #fff; }
+.factive { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.factive .tagbtn { min-height: 34px; font-size: .9rem; background: var(--mist); border-color: var(--mist); }
+.fsheet { display: grid; gap: 4px; padding: 12px 0 4px; }
+.fsheet select { width: 100%; }
+.pfilter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 4px; }
+.pfilter .seg { margin: 0; padding: 2px; }
+.pfilter .seg button { min-height: 36px; padding: 0 10px; font-size: .92rem; }
+.pfilter .pill { flex: 1 1 140px; width: auto; }
