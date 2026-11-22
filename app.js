@@ -234,6 +234,11 @@
     [/chocolate em po|cacau/, 90], [/aveia/, 90], [/arroz/, 185], [/leite condensado/, 300], [/leite|agua|creme de leite|oleo|azeite/, 240], [/mel/, 340],
     [/queijo ralado|parmesao/, 100], [/gotas de chocolate|chocolate/, 170]];
   const dens = ing => (ing && /^(g|ml)$/i.test(ing.unit || "") && (DENS.find(([re]) => re.test(norm(ing.name))) || [])[1]) || 0;
+  // "2 xícaras" ou "3 colheres de sopa" de um ingrediente com medida conhecida viram g ou ml
+  const cupUnit = u => { const k = norm(u); return /^(xic|xicara|xicaras|xic\.|cup|cups)$/.test(k) ? 1 : /^(cs|colher|colheres|colher de sopa|colheres de sopa|c\. sopa|c sopa)$/.test(k) ? 1 / 16 : 0; };
+  const densByName = name => (DENS.find(([re]) => re.test(norm(name))) || [])[1] || 0;
+  const isLiquid = name => /leite|agua|creme de leite|oleo|azeite|suco|caldo|vinho/.test(norm(name)) && !/condensado|em po/.test(norm(name));
+  const unit0 = (cu, n) => cu === 1 ? (n <= 1 ? "xícara" : "xícaras") : (n <= 1 ? "colher de sopa" : "colheres de sopa");
   function cups(ing, qty) {
     const d = dens(ing); if (!d || !qty) return "";
     const n = qty / d;
@@ -598,10 +603,11 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${flat === true ? "" : `<div class="itools"><button class="btn sm" data-act="open" data-key="add-${r.id}" aria-expanded="${ui.open.has("add-" + r.id)}">${ui.open.has("add-" + r.id) ? "Fechar" : "+ Ingrediente"}</button>
         <button class="ghost" data-act="copy-list" data-key="r-${r.id}">Copiar lista</button><button class="ghost" data-act="open" data-key="bulk-r-${r.id}">Responsável</button></div>${bulkPanel("r-" + r.id)}`}
       ${flat !== true && !ui.open.has("add-" + r.id) ? "" : `<form class="additem" data-form="add-item" data-id="${r.id}">
-        <input name="name" placeholder="${flat ? "Item" : "Ingrediente"}" list="dl-ings" required data-act="ing-hint">
+        <input name="name" placeholder="${flat === true ? "Item" : "Ingrediente"}" list="dl-ings" required data-act="ing-hint">
         <input name="qty" placeholder="Qtd" inputmode="decimal">
-        <input name="unit" placeholder="un, g, lata…">
+        <input name="unit" placeholder="${flat === true ? "un, g, lata…" : "g, xícara…"}" list="dl-units" autocapitalize="none">
         <button class="btn">Adicionar</button>
+        ${flat === true ? "" : `<datalist id="dl-units"><option value="g"><option value="ml"><option value="un"><option value="xícara"><option value="colher de sopa"></datalist><p class="hint">Na unidade, pode escrever xícara ou colher de sopa: farinha, açúcar, manteiga, leite e parecidos são convertidos para g ou ml.</p>`}
       </form>`}
       ${flat === true ? gtools("r-" + r.id, "Definir responsável pelos itens") : ""}
       </section>
@@ -1009,7 +1015,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (el.classList.contains("lk-q")) { const k = norm(el.value); el.parentNode.querySelectorAll("[data-name]").forEach(b => { b.hidden = !!k && !b.dataset.name.includes(k); }); }
     if (el.dataset.act === "ing-hint") {
       const u = el.form.elements.unit, g = findIng(el.value);
-      u.value = g ? g.unit : u.disabled ? "" : u.value; u.disabled = !!g;
+      const lock = !!g && !dens(g);
+      if (g) { if (!cupUnit(u.value)) u.value = g.unit; } else if (u.disabled || u.dataset.auto === u.value) u.value = "";
+      u.dataset.auto = g ? g.unit : ""; u.disabled = lock;
     }
   });
   view.addEventListener("focusout", () => setTimeout(() => { if (renderPending) render(false); }, 350));
@@ -1067,8 +1075,15 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     e.preventDefault();
     const f = e.target, kind = f.dataset.form, v = n => f.querySelector(`[name="${n}"]`).value.trim();
     if (kind === "add-item") {
-      const ing = ensureIngredient(v("name"), v("unit"));
-      add("recipe_items", { id: uid(), recipe_id: f.dataset.id, ingredient_id: ing.id, qty: num(v("qty")), suggested: false, veg: "", note: "", pos: nextPos("recipe_items") });
+      let unit = v("unit"), qty = num(v("qty")); const cu = cupUnit(unit), old = findIng(v("name"));
+      if (cu) {
+        const d = old ? dens(old) : densByName(v("name"));
+        if (d) { const n = qty || 1; qty = Math.round(n * cu * d); unit = old ? old.unit : isLiquid(v("name")) ? "ml" : "g"; toast(`${nf.format(n)} ${unit0(cu, n)} de ${v("name")}: ${qty} ${unit}.`); }
+        else if (old) return toast(`Não sei converter ${old.name} de xícara para ${old.unit || "a unidade da lista"}. Escreva a quantidade em ${old.unit || "unidades"}.`);
+        else unit = cu === 1 ? "xícara" : "colher de sopa";
+      }
+      const ing = ensureIngredient(v("name"), unit);
+      add("recipe_items", { id: uid(), recipe_id: f.dataset.id, ingredient_id: ing.id, qty, suggested: false, veg: "", note: "", pos: nextPos("recipe_items") });
     } else if (kind === "new-recipe") {
       const r = { id: uid(), name: v("name"), block: v("block"), reviewed: false, reviewed_by: "", serves: "", weekly: false, notes: "", prep: "", pos: nextPos("recipes") };
       ui.open.delete("newrec"); ui.rec = r.id; add("recipes", r); window.scrollTo(0, 0);
