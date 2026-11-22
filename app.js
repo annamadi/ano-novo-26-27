@@ -600,6 +600,12 @@
     });
   }
   function vRecipe(r, flat) {
+    const detBlock = `<div class="rdetbox"><div class="grid2">
+        <label class="fld">Nome${inp("recipes", r.id, "name", r.name)}</label>
+        <label class="fld">Tipo<select data-act="set" data-t="recipes" data-id="${r.id}" data-f="block">${[...new Set(BLOCKS.concat(r.block))].map(b => `<option ${b === r.block ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></label>
+        <label class="fld">Para quantas pessoas${inp("recipes", r.id, "serves", r.serves)}</label>
+      </div>
+      <button class="btn danger" data-act="del" data-t="recipes" data-id="${r.id}">Excluir receita</button></div>`;
     const open = !!flat, page = flat === "page", st = recipeStatus(r);
     const items = S.recipe_items.filter(i => i.recipe_id === r.id).sort(byPos);
     const qs = S.pendencias.filter(p => p.recipe_id === r.id).sort((a, b) => (a.done - b.done) || byPos(a, b)), qOpen = qs.filter(p => !p.done).length;
@@ -671,17 +677,11 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         ? `<span>Revisada${r.reviewed_by ? " por " + esc(r.reviewed_by) : ""}. Ingredientes e quantidades confirmados.</span><button class="ghost" data-act="review" data-id="${r.id}" data-v="0">Desfazer</button>`
         : qOpen ? `<span>Resolva ${qOpen === 1 ? "a dúvida acima" : `as ${qOpen} dúvidas acima`} antes de marcar como revisada.</span>`
         : `<span>Leu a lista inteira?</span><button class="btn primary" data-act="review" data-id="${r.id}" data-v="1">Marcar como revisada</button>`}</div>`}
-      ${flat === true ? "" : `<button class="ghost chev rdet" data-act="open" data-key="det-${r.id}" aria-expanded="${ui.open.has("det-" + r.id)}">Detalhes da receita</button>
-      ${ui.open.has("det-" + r.id) ? `<div class="grid2">
-        <label class="fld">Nome${inp("recipes", r.id, "name", r.name)}</label>
-        <label class="fld">Tipo<select data-act="set" data-t="recipes" data-id="${r.id}" data-f="block">${[...new Set(BLOCKS.concat(r.block))].map(b => `<option ${b === r.block ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></label>
-        <label class="fld">Para quantas pessoas${inp("recipes", r.id, "serves", r.serves)}</label>
-      </div>
-      <button class="btn danger" data-act="del" data-t="recipes" data-id="${r.id}">Excluir receita</button>` : ""}`}
+      ${flat === true || flat === "page" ? "" : `<button class="ghost chev rdet" data-act="open" data-key="det-${r.id}" aria-expanded="${ui.open.has("det-" + r.id)}">Detalhes da receita</button>${ui.open.has("det-" + r.id) ? detBlock : ""}`}
     </div>`;
     const badges = `${r.brought ? `<span class="tag">leva pronto</span>` : ""}${qOpen ? `<span class="tag nov">${qOpen} ${qOpen === 1 ? "dúvida" : "dúvidas"}</span>` : ""}${st.idea ? "" : isRev(r) ? `<span class="tag ok">conferida</span>` : `<span class="tag sug">a conferir</span>`}`;
     if (flat === true) return `<article class="recipe open flat" id="r-${r.id}">${body}</article>`;
-    if (page) return `<article class="recipe page" id="r-${r.id}"><header class="rpage"><p class="rkind">${esc(r.block)}${r.serves ? `, para ${esc(r.serves)}` : ""}</p><h2>${esc(r.name)}</h2><p class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text[0].toUpperCase() + st.text.slice(1))}</p><p class="rtags">${badges}</p></header>${body}</article>`;
+    if (page) return `<article class="recipe page" id="r-${r.id}"><header class="rpage"><p class="rkind">${esc(r.block)}${r.serves ? `, para ${esc(r.serves)}` : ""}</p><div class="rtitle"><h2>${esc(r.name)}</h2><button class="icon" data-act="open" data-key="det-${r.id}" aria-expanded="${ui.open.has("det-" + r.id)}" aria-label="Editar nome, tipo e número de pessoas"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button></div><p class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text[0].toUpperCase() + st.text.slice(1))}</p><p class="rtags">${badges}</p>${ui.open.has("det-" + r.id) ? detBlock : ""}</header>${body}</article>`;
     return `<article class="recipe" id="r-${r.id}" data-name="${esc(norm(r.name))}">
       <button class="rhead chev" data-act="rec-open" data-id="${r.id}"><span>
         <span class="rname">${esc(r.name)}</span>

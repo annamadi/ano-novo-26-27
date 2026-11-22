@@ -622,3 +622,11 @@ body.scrolled .mini { transform: none; visibility: visible; }
 /* unidade editável no ingrediente aberto da receita */
 .itedit { grid-template-columns: minmax(0, 1fr) 64px 84px 44px; }
 .itedit .iunit { min-width: 0; padding-left: 8px; padding-right: 6px; }
+
+/* lápis ao lado do título da receita */
+.rtitle { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.rtitle h2 { margin: 0; min-width: 0; }
+.rtitle .icon { flex: none; margin-top: 2px; }
+.rtitle .icon[aria-expanded="true"] { background: var(--ink); color: #fff; }
+.rdetbox { margin: 12px 0 4px; padding: 12px 14px; border-radius: 12px; background: var(--mist); }
+.rdetbox .btn.danger { margin-top: 8px; }
