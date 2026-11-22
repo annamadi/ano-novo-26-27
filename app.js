@@ -390,17 +390,19 @@
   const money = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const numIn = v => v ? nf.format(v).replace(/\./g, "") : "";
   function xRow(e, showAct) {
-    const a = showAct && e.activity_id ? get("activities", e.activity_id) : null;
-    return `<li class="xrow ${e.done ? "done" : ""}" data-name="${esc(norm(e.item))}">
+    const a = showAct && e.activity_id ? get("activities", e.activity_id) : null, open = ui.open.has("x-" + e.id);
+    const chips = `${e.owner ? `<span class="tag who">${esc(e.owner)}</span>` : `<span class="tag sug">sem responsável</span>`}${e.buy ? `<span class="tag">precisa comprar</span>` : ""}${a ? `<span class="tag">${esc(a.name)}</span>` : ""}${e.buy && Number(e.paid) ? `<span class="tag ok">R$ ${money.format(Number(e.paid))}</span>` : ""}`;
+    return `<li class="xrow ${e.done ? "done" : ""} ${open ? "open" : ""}" data-name="${esc(norm(e.item))}">
       ${tick("extras", e.id, "done", e.done, (e.buy ? "Comprado: " : "Separado: ") + e.item)}
-      ${inp("extras", e.id, "item", e.item, 'aria-label="Item"')}
-      <button class="x" data-act="del" data-t="extras" data-id="${e.id}" aria-label="Excluir ${esc(e.item)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button>
-      <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}
+      <button class="xmain" data-act="open" data-key="x-${e.id}" aria-expanded="${open}" aria-label="${open ? "Fechar" : "Editar"} ${esc(e.item)}"><span class="xname">${esc(e.item)}</span><span class="chips">${chips}</span></button>
+      ${open ? `<div class="xedit">
+        <div class="xline">${inp("extras", e.id, "item", e.item, 'aria-label="Nome do item"')}<button class="x" data-act="del" data-t="extras" data-id="${e.id}" aria-label="Excluir ${esc(e.item)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></div>
+        <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}
         ${e.buy ? `<label class="paid">R$ <input data-act="set" data-t="extras" data-id="${e.id}" data-f="paid" data-num="1" value="${esc(numIn(e.paid))}" inputmode="decimal" placeholder="pago" aria-label="Valor pago"></label>
         ${hasCol("extras", "bought_by") ? `<select class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="bought_by" aria-label="Quem pagou">${payOpts(e.bought_by, "Quem pagou")}</select>` : ""}
-        <input class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="store" value="${esc(e.store)}" data-sug="stores" autocomplete="off" placeholder="Loja" aria-label="Loja">` : ""}
-        ${a ? `<span class="tag">${esc(a.name)}</span>` : ""}</div>
-      ${pickPanel("extras", e.id, e.owner)}
+        <input class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="store" value="${esc(e.store)}" data-sug="stores" autocomplete="off" placeholder="Loja" aria-label="Loja">` : ""}</div>
+        ${pickPanel("extras", e.id, e.owner)}
+        <button class="btn sm xclose" data-act="open" data-key="x-${e.id}">Fechar</button></div>` : ""}
     </li>`;
   }
 
@@ -821,7 +823,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         return `<div class="msg"><p><b>${esc(c.author || "Sem nome")} <small>${fmtWhen(c.created_at)}</small></b>${rich(c.body)}</p>${own ? `<span class="acts">
           <button class="icon" data-act="open" data-key="ec-${c.id}" aria-label="Editar comentário"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button>
           <button class="icon" data-act="del" data-t="comments" data-id="${c.id}" aria-label="Apagar comentário"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></span>` : ""}</div>`; }).join("")}
-      <form class="newrow" data-form="add-comment" data-pend="${p.id}"><input name="body" placeholder="Comentar (use @ para marcar alguém)" data-sug="mention" autocomplete="off" required aria-label="Comentar em ${esc(p.subject)}"><button class="btn">Enviar</button></form></div>`;
+      ${ui.open.has("cm-" + p.id) ? `<form class="newrow cform" data-form="add-comment" data-pend="${p.id}"><input name="body" placeholder="Escreva (use @ para marcar alguém)" data-sug="mention" autocomplete="off" required aria-label="Comentar em ${esc(p.subject)}"><button class="btn">Enviar</button></form>` : ""}</div>`;
   }
   function pendRow(p, inRecipe) {
     const key = norm(String(p.subject).split(":")[0]);
@@ -833,8 +835,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <div>${ui.open.has("ep-" + p.id) ? `<form class="pedit" data-form="edit-pend" data-id="${p.id}"><input name="subject" value="${esc(p.subject)}" required aria-label="Texto da pendência"><textarea name="detail" rows="${Math.min(8, Math.max(2, Math.ceil(String(p.detail || "").length / 34)))}" placeholder="Detalhe (opcional)" aria-label="Detalhe">${esc(p.detail)}</textarea><div><button class="btn">Salvar</button><button type="button" class="ghost" data-act="open" data-key="ep-${p.id}">Cancelar</button></div></form>`
         : `<strong>${rich(p.subject)}</strong>${p.detail ? `<p>${rich(p.detail)}</p>` : ""}`}
         ${noComments ? area("pendencias", p.id, "answer", p.answer, p.kind === "Dúvida" ? "Resposta" : "Comentário") : thread(p)}
-        <div class="pacts">${!hasCol("pendencias", "recipe_id") ? "" : inRecipe ? `<button class="ghost" data-act="pend-out" data-id="${p.id}">Tirar da receita</button>`
-          : `<button class="ghost" data-act="open" data-key="lk-${p.id}" aria-expanded="${ui.open.has("lk-" + p.id)}">Vincular a receita</button>`}
+        <div class="pacts">${noComments ? "" : `<button class="ghost" data-act="open" data-key="cm-${p.id}" aria-expanded="${ui.open.has("cm-" + p.id)}">${ui.open.has("cm-" + p.id) ? "Fechar" : "Comentar"}</button>`}${!hasCol("pendencias", "recipe_id") ? "" : inRecipe ? `<button class="ghost" data-act="pend-out" data-id="${p.id}" aria-label="Tirar da receita">Desvincular</button>`
+          : `<button class="ghost" data-act="open" data-key="lk-${p.id}" aria-expanded="${ui.open.has("lk-" + p.id)}" aria-label="Vincular a uma receita">Vincular</button>`}
         <span class="acts">${ui.open.has("ep-" + p.id) ? "" : `<button class="icon" data-act="open" data-key="ep-${p.id}" aria-label="Editar pendência"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button>`}
         <button class="icon" data-act="del" data-t="pendencias" data-id="${p.id}" aria-label="Excluir pendência"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></span></div>
         ${!inRecipe && ui.open.has("lk-" + p.id) ? `<div class="linker"><input type="search" class="lk-q" placeholder="Buscar receita" aria-label="Buscar receita">
@@ -857,7 +859,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <button class="btn primary">Adicionar pendência</button></form>` : ""}
     ${mine.length ? `<button class="mebar" data-act="ui-set" data-f="pMe" data-v="${ui.pMe ? "" : "1"}" aria-pressed="${!!ui.pMe}"><b>${mine.length}</b> ${mine.length === 1 ? "pendência marca você" : "pendências marcam você"}<span>${ui.pMe ? "Ver todas" : "Ver"}</span></button>` : ""}
     <div class="pfilter">${seg3("pStatus", ["Todas", "Abertas", "Resolvidas"])}
-      ${pill("pRec", "Todas as receitas", [["none", "Sem receita"], ...withRec.map(r => [r.id, r.name])])}</div>
+      ${pill("pRec", "Receita", [["none", "Sem receita"], ...withRec.map(r => [r.id, r.name])])}</div>
     ${S.pendencias.length > 5 ? `<input type="search" id="pend-q" placeholder="Buscar nas pendências" aria-label="Buscar nas pendências">` : ""}
     ${kinds.map(k => {
       const l = free.filter(p => p.kind === k).sort(byPos);
@@ -873,12 +875,11 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const shown = all.filter(en => passF(en, { who: ui.tWho, status: ui.tStatus }));
     const orphans = all.filter(en => !en.r.owner && !isDone(en)), orphan = orphans.map(nameOf);
     bulk.set("orphans", { name: "Sem responsável", list: orphans });
-    return `<p class="lead">O que vem de casa: comida pronta, itens de uso geral e o que as atividades precisam. Marque quando estiver separado.</p>
-    ${orphan.length ? `<div class="warn"><strong>${orphan.length} ${orphan.length === 1 ? "item sem responsável" : "itens sem responsável"}:</strong> ${esc(orphan.slice(0, 8).join(", "))}${orphan.length > 8 ? ` e mais ${orphan.length - 8}` : ""}.
-      <span class="warn-acts"><button class="ghost" data-act="open" data-key="bulk-orphans">Atribuir responsável</button>${ui.tWho === "-" ? "" : `<button class="ghost" data-act="ui-set" data-f="tWho" data-v="-">Ver só esses</button>`}</span>
+    return `${orphan.length ? `<div class="warnbar"><span><b>${orphan.length}</b> ${orphan.length === 1 ? "item sem responsável" : "itens sem responsável"}</span>
+      <span class="warn-acts"><button class="ghost" data-act="open" data-key="bulk-orphans">Atribuir</button>${ui.tWho === "-" ? `<button class="ghost" data-act="ui-set" data-f="tWho" data-v="">Ver todos</button>` : `<button class="ghost" data-act="ui-set" data-f="tWho" data-v="-">Ver</button>`}</span>
       ${bulkPanel("orphans")}</div>` : ""}
-    <div class="shopbar">${seg3("tStatus", ["Tudo", "Falta", "Separado"])}</div>
-    <div class="fchips" role="group" aria-label="Filtros">${pill("tWho", "Pessoa", people2())}${ui.tWho || ui.tStatus ? `<button class="ghost" data-act="clear-take">Limpar</button>` : ""}</div>
+    <div class="frow">${seg3("tStatus", ["Tudo", "Falta", "Separado"])}${pill("tWho", "Pessoa", people2())}</div>
+    ${ui.tWho || ui.tStatus ? `<button class="ghost clearf" data-act="clear-take">Limpar filtros</button>` : ""}
     ${groupList(shown, "origin", tot, "h2", "take") || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada na lista ainda."}</p>`}
     <form class="newrow" data-form="add-extra"><input name="item" placeholder="Adicionar item de uso geral" required><button class="btn">Adicionar</button></form>
     ${(h => h.length ? `<details class="unused"><summary>Já tem na casa (${h.length})</summary><p class="hint">Não entram em Compras nem em Levar. Vale confirmar com o dono da casa.</p>
@@ -931,11 +932,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const cnt = l => `<small>${l.filter(isDone).length}/${l.length}</small>`, paid = paidSum(buyAll);
     return `<div class="shopbar">
       <div class="ptabs" role="group" aria-label="Lista de quem">${opts.map(n => `<button data-act="ui-set" data-f="me" data-v="${esc(n)}" aria-pressed="${norm(n) === norm(me)}"><i aria-hidden="true">${esc(n.trim()[0] || "?")}</i>${esc(n)}</button>`).join("")}</div>
-      ${seg3("mStatus", ["Tudo", "Falta", "Feito"])}
     </div>
-    <div class="fchips" role="group" aria-label="Filtros">${pill("mSector", "Seção", sectors.map(x => [x, x]))}${ui.mSector || ui.mStatus ? `<button class="ghost" data-act="clear-mine">Limpar</button>` : ""}</div>
-    <p class="hint">Tudo em que ${esc(me)} aparece como responsável, incluindo o que está marcado para todos.${paid ? ` Valor pago nestes itens: R$ ${money.format(paid)}.` : ""}</p>
-    ${(bulk.set("mine-all", { name: "Lista de " + me, list: [...buyAll, ...takeAll] }), "")}<button class="btn" data-act="copy-list" data-key="mine-all">Copiar minha lista</button>
+    <div class="frow">${seg3("mStatus", ["Tudo", "Falta", "Feito"])}${pill("mSector", "Seção", sectors.map(x => [x, x]))}</div>
+    ${(bulk.set("mine-all", { name: "Lista de " + me, list: [...buyAll, ...takeAll] }), "")}<p class="minehint"><span>O que está no nome de ${esc(me)} ou marcado para todos.${paid ? ` Pago: R$ ${money.format(paid)}.` : ""}</span><button class="ghost" data-act="copy-list" data-key="mine-all">Copiar lista</button>${ui.mSector || ui.mStatus ? `<button class="ghost" data-act="clear-mine">Limpar filtros</button>` : ""}</p>
     <h2 class="sec">Comprar ${cnt(buyAll)}</h2>
     ${groupList(buy, "sector", tot, "h3", "mb") || `<p class="empty">${buyAll.length ? "Nenhuma compra com esses filtros." : "Nenhuma compra. Defina os responsáveis na aba Compras."}</p>`}
     <h2 class="sec">Levar ${cnt(takeAll)}</h2>
@@ -1365,6 +1364,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     } else if (kind === "edit-comment") {
       ui.open.delete("ec-" + f.dataset.id); update("comments", f.dataset.id, { body: v("body") }, true);
     } else if (kind === "add-comment") {
+      ui.open.delete("cm-" + f.dataset.pend);
       add("comments", { id: uid(), pend_id: f.dataset.pend, author: who, body: v("body"), created_at: new Date().toISOString() });
     } else if (kind === "paste-recipe") {
       const lines = v("text").split("\n").map(parseLine).filter(Boolean);
@@ -1394,6 +1394,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (!TABS.includes(t)) t = "start";
     ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null; ui.sheet = null; ui.fsheet = false; ui.rec = null; ui.open.delete("acct");
     [...ui.open].filter(k => /^(q-|ep-|ec-|lk-|bulk-|add-|new)/.test(k)).forEach(k => ui.open.delete(k));
+    [...ui.open].filter(k => /^(cm-|x-)/.test(k)).forEach(k => ui.open.delete(k));
     if (SEC[t] === "plano") localStorage.setItem("an-plano", t);
     [...ui.open].filter(k => k.startsWith("own-")).forEach(k => ui.open.delete(k)); render(true); window.scrollTo(0, 0);
   }
