@@ -644,7 +644,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${hasCol("recipes", "brought") ? `<div class="fld">${chk("recipes", r.id, "brought", r.brought, "Alguém leva pronto (os ingredientes saem das compras)")}
         ${r.brought ? `<div class="pickwrap">${pickBtn(r.id, r.owner)}</div>${pickPanel("recipes", r.id, r.owner)}` : ""}</div>` : ""}
       </section>`}
-      <section class="rsec"><h3>${flat === true ? "Itens" : "Ingredientes"} <small>${CK() && flat !== true && items.length ? `${items.filter(isChk).length} de ${items.length} conferidos` : items.length}</small></h3>
+      <section class="rsec">${flat === true ? "" : `<h3>Ingredientes <small>${CK() && flat !== true && items.length ? `${items.filter(isChk).length} de ${items.length} conferidos` : items.length}</small></h3>`}
       ${flat === true || !items.length ? "" : `<p class="hint">${CK() ? "Marque o que você conferiu (ingrediente e quantidade). Toque no nome para editar." : "Toque num ingrediente para editar."}</p>`}
       ${flat !== true && vegItems(r).length ? `<p class="vegline">${LEAF}<span>${esc(vegItems(r).join(", "))}</span></p>` : ""}
       <ul class="items">${items.map((it, idx) => {
@@ -652,7 +652,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         const sep = kinds.size > 1 && (idx === 0 || kOf(items[idx - 1]) !== kOf(it)) ? `<li class="ksep">${KIND_LABEL[kOf(it)]}</li>` : "";
         const more = ui.open.has(it.id), cp = cups(g, it.qty);
         const ck = CK() && flat !== true, by = checkers(it), mine = by.some(n => norm(n) === norm(who || "eu"));
-        const tg = `${ck ? (by.length ? "" : it.suggested ? `<span class="tag sug">sugestão da IA</span>` : `<span class="tag new">novo</span>`) : it.suggested && !r.reviewed ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}${isAtHouse(g) ? `<span class="tag new">tem na casa</span>` : isHome(g) ? (g.owner ? `<span class="tag new">${esc(g.owner)} leva</span>` : `<span class="tag nov">leva de casa, sem responsável</span>`) : ""}`;
+        const tg = `${ck ? (by.length ? "" : it.suggested ? `<span class="tag sug">sugestão da IA</span>` : `<span class="tag new">novo</span>`) : it.suggested && !r.reviewed && flat !== true ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}${isAtHouse(g) ? `<span class="tag new">tem na casa</span>` : isHome(g) ? (g.owner ? `<span class="tag new">${esc(g.owner)} leva</span>` : `<span class="tag nov">leva de casa, sem responsável</span>`) : ""}`;
         const ckBtn = ck ? `<button class="ckb" data-act="check" data-id="${it.id}" aria-pressed="${by.length > 0}" aria-label="${mine || (by.length && by.every(n => norm(n) === "caderno")) ? "Tirar a conferência de" : by.length ? "Já conferido por outra pessoa. Conferir também" : "Conferi"} ${esc(g.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : "";
         if (!more) return `${sep}<li class="ro">${ckBtn}<button class="itro" data-act="open" data-key="${it.id}" aria-expanded="false" aria-label="Editar ${esc(g.name)}">
           <span class="itn">${esc(g.name)}${it.veg === "sim" ? LEAF : ""}</span><b>${esc(fmtQty(it.qty, g.unit))}</b>
@@ -682,9 +682,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           </div>` : ""}
         </li>`;
       }).join("") || `<li class="empty">Sem ingredientes ainda.</li>`}</ul>
-      ${flat === true ? "" : `<div class="itools"><button class="btn sm" data-act="open" data-key="add-${r.id}" aria-expanded="${ui.open.has("add-" + r.id)}">${ui.open.has("add-" + r.id) ? "Fechar" : "+ Ingrediente"}</button>
-        <button class="ghost" data-act="copy-list" data-key="r-${r.id}">Copiar lista</button><button class="ghost" data-act="open" data-key="bulk-r-${r.id}">Responsável</button></div>${bulkPanel("r-" + r.id)}`}
-      ${flat !== true && !ui.open.has("add-" + r.id) ? "" : `<form class="additem" data-form="add-item" data-id="${r.id}">
+      <div class="itools"><button class="btn sm" data-act="open" data-key="add-${r.id}" aria-expanded="${ui.open.has("add-" + r.id)}">${ui.open.has("add-" + r.id) ? "Fechar" : flat === true ? "+ Item" : "+ Ingrediente"}</button>
+        <button class="ghost" data-act="copy-list" data-key="r-${r.id}">Copiar lista</button><button class="ghost" data-act="open" data-key="bulk-r-${r.id}">Responsável</button></div>${bulkPanel("r-" + r.id)}
+      ${!ui.open.has("add-" + r.id) ? "" : `<form class="additem" data-form="add-item" data-id="${r.id}">
         <input name="name" placeholder="${flat === true ? "Item" : "Ingrediente"}" data-sug="ings" autocomplete="off" required data-act="ing-hint">
         <input name="qty" placeholder="Qtd" inputmode="decimal">
         <input name="unit" placeholder="${flat === true ? "un, g, lata…" : "g, xícara…"}" autocapitalize="none" data-sug="units" autocomplete="off">
@@ -693,7 +693,6 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         <label class="secpick" hidden>Ingrediente novo. Seção do mercado <select name="sector"><option value="">Escolher…</option>${SECTORS.map(x => `<option>${esc(x)}</option>`).join("")}</select></label>
         ${flat === true ? "" : `<p class="hint">Xícara e colher de sopa de farinha, açúcar, manteiga, leite e parecidos são convertidas para g ou ml.</p>`}
       </form>`}
-      ${flat === true ? gtools("r-" + r.id, "Definir responsável pelos itens") : ""}
       </section>
       ${flat === true ? "" : `<section class="rsec"><h3><label for="prep-${r.id}">Modo de preparo e notas</label></h3><textarea id="prep-${r.id}" data-act="set" data-t="recipes" data-id="${r.id}" data-f="prep" rows="${Math.min(12, Math.max(3, (r.prep || "").split("\n").length + 1))}" placeholder="Passos, dicas, quem faz">${esc(r.prep)}</textarea>${linkList(r.prep)}</section>`}
       <section class="rsec">      ${!hasCol("pendencias", "recipe_id") ? "" : `<h3>Dúvidas ${qs.length ? `<small>${qs.filter(p => p.done).length} de ${qs.length} resolvidas</small>` : ""}</h3>
@@ -892,32 +891,37 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
 
   function vHome() {
     const lists = S.recipes.filter(r => r.block === "Casa").sort(byPos);
-    const plain = S.extras.filter(e => !e.activity_id).sort(byPos);
-    return `<p class="lead">O que não é comida nem entretenimento. O que precisa ser comprado aparece na aba Compras; o que vem de casa, na aba Levar.</p>
-    <h2>Suprimentos da casa</h2>
-    <p class="hint">Limpeza, descartáveis e afins, com quantidade. Entram na lista de compras como os ingredientes.</p>
+    const plain = S.extras.filter(e => !e.activity_id).sort((a, b) => (a.done - b.done) || String(a.owner || "~").localeCompare(String(b.owner || "~"), "pt") || a.item.localeCompare(b.item, "pt"));
+    const nSup = S.recipe_items.filter(i => lists.some(r => r.id === i.recipe_id)).length, addX = ui.open.has("newgen");
+    return `<h2>Suprimentos <small>${nSup}</small></h2>
+    <p class="hint">Limpeza e descartáveis, com quantidade. Entram em Compras, ou em Levar se alguém trouxer.</p>
     ${lists.map(r => vRecipe(r, true)).join("") || `<p class="empty">Nenhuma lista de suprimentos.</p>`}
-    <h2>Itens de uso geral <small>${plain.filter(e => e.done).length}/${plain.length}</small></h2>
-    <p class="hint">Toalha, travesseiro, repelente. Marque "Precisa comprar" no que não for vir de casa.</p>
+    <h2>Uso geral <small>${plain.filter(e => e.done).length}/${plain.length}</small></h2>
+    <p class="hint">Toalha, travesseiro, repelente. Toque no item para definir quem leva ou se precisa comprar.</p>
     <ul class="xlist">${plain.map(e => xRow(e)).join("") || `<li class="empty">Nada na lista ainda.</li>`}</ul>
-    <form class="newrow" data-form="add-extra"><input name="item" placeholder="Adicionar item de uso geral" required><button class="btn">Adicionar</button></form>`;
+    <div class="itools"><button class="btn sm" data-act="open" data-key="newgen" aria-expanded="${addX}">${addX ? "Fechar" : "+ Item"}</button></div>
+    ${addX ? `<form class="newrow one" data-form="add-extra"><input name="item" placeholder="Item de uso geral" required><button class="btn">Adicionar</button></form>` : ""}`;
   }
 
   function vFun() {
-    return `<p class="lead">Jogos, gincanas e programas. O que cada atividade precisa aparece também na aba Levar.</p>
-    <form class="newrow" data-form="new-activity"><input name="name" placeholder="Nome da atividade nova" required><button class="btn primary">Criar atividade</button></form>
+    const addA = ui.open.has("newact");
+    return `<div class="itools"><button class="btn sm ${addA ? "" : "primary"}" data-act="open" data-key="newact" aria-expanded="${addA}">${addA ? "Fechar" : "+ Atividade"}</button></div>
+    ${addA ? `<form class="newrow one" data-form="new-activity"><input name="name" placeholder="Nome da atividade" required><button class="btn">Criar</button></form>` : ""}
     ${[...S.activities].sort(byPos).map(a => {
-      const open = ui.open.has(a.id), items = S.extras.filter(e => e.activity_id === a.id).sort(byPos);
-      const meta = items.length ? `${items.filter(e => e.done).length} de ${items.length} ${items.length === 1 ? "item resolvido" : "itens resolvidos"}` : "sem itens";
-      return `<article class="recipe ${open ? "open" : ""}">
-        <button class="rhead chev" data-act="open" data-key="${a.id}" aria-expanded="${open}"><span><span class="rname">${esc(a.name)}</span><span class="rmeta">${meta}</span></span></button>
+      const open = ui.open.has(a.id), items = S.extras.filter(e => e.activity_id === a.id).sort((x, y) => (x.done - y.done) || String(x.owner || "~").localeCompare(String(y.owner || "~"), "pt") || x.item.localeCompare(y.item, "pt"));
+      const nd = items.filter(e => e.done).length, ed = ui.open.has("ed-" + a.id), addI = ui.open.has("ai-" + a.id);
+      return `<article class="recipe act ${open ? "open" : ""}">
+        <button class="rhead chev" data-act="open" data-key="${a.id}" aria-expanded="${open}"><span><span class="rname">${esc(a.name)}</span>${a.notes && !open ? `<span class="rmeta clip">${esc(a.notes)}</span>` : ""}</span>
+          ${items.length ? `<span class="rprog ${nd === items.length ? "ok" : ""}" aria-label="${nd} de ${items.length} itens resolvidos">${nd}/${items.length}</span>` : `<span class="rprog none">sem itens</span>`}</button>
         ${open ? `<div class="rbody">
-          <label class="fld">Nome${inp("activities", a.id, "name", a.name)}</label>
           <label class="fld">Como funciona${area("activities", a.id, "notes", a.notes, "Regras, quem organiza, quando")}</label>
-          <h3>O que precisa</h3>
+          <h3>O que precisa <small>${nd}/${items.length}</small></h3>
           <ul class="xlist">${items.map(e => xRow(e)).join("") || `<li class="empty">Nada ainda.</li>`}</ul>
-          <form class="newrow" data-form="add-extra" data-activity="${a.id}"><input name="item" placeholder="Item para comprar ou levar" required><button class="btn">Adicionar</button></form>
-          <button class="btn danger" data-act="del" data-t="activities" data-id="${a.id}">Excluir atividade</button>
+          <div class="itools"><button class="btn sm" data-act="open" data-key="ai-${a.id}" aria-expanded="${addI}">${addI ? "Fechar" : "+ Item"}</button>
+            <button class="icon" data-act="open" data-key="ed-${a.id}" aria-expanded="${ed}" aria-label="Editar nome ou excluir a atividade"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button></div>
+          ${addI ? `<form class="newrow one" data-form="add-extra" data-activity="${a.id}"><input name="item" placeholder="Item para comprar ou levar" required><button class="btn">Adicionar</button></form>` : ""}
+          ${ed ? `<div class="rdetbox"><label class="fld">Nome${inp("activities", a.id, "name", a.name)}</label>
+            <button class="btn danger" data-act="del" data-t="activities" data-id="${a.id}">Excluir atividade</button></div>` : ""}
         </div>` : ""}</article>`;
     }).join("") || `<p class="empty">Nenhuma atividade ainda. Crie a primeira acima.</p>`}`;
   }
@@ -1397,7 +1401,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (!TABS.includes(t)) t = "start";
     ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null; ui.sheet = null; ui.fsheet = false; ui.rec = null; ui.open.delete("acct");
     [...ui.open].filter(k => /^(q-|ep-|ec-|lk-|bulk-|add-|new)/.test(k)).forEach(k => ui.open.delete(k));
-    [...ui.open].filter(k => /^(cm-|x-)/.test(k)).forEach(k => ui.open.delete(k));
+    [...ui.open].filter(k => /^(cm-|x-|ed-|ai-)/.test(k)).forEach(k => ui.open.delete(k));
     if (SEC[t] === "plano") localStorage.setItem("an-plano", t);
     [...ui.open].filter(k => k.startsWith("own-")).forEach(k => ui.open.delete(k)); render(true); window.scrollTo(0, 0);
   }

@@ -765,3 +765,16 @@ h2.grp-h .grp-n { font: 500 1.22rem/1.2 var(--display); }
 .tag.t-store { color: #8E4A62; border-color: #DDB8C6; }
 .tag.t-act { color: #6A55A8; border-color: #C9BEE6; }
 .tag.t-rec { color: var(--ok); border-color: #B5D3C3; }
+
+/* passada de beleza: Casa e Entretenimento */
+.recipe.flat { border: 0; padding: 0; margin: 0; }
+.recipe.flat .rsec { margin-top: 4px; }
+.recipe.act { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; margin: 0; padding: 0; }
+.recipe.act.open { border: 1px solid var(--line); border-radius: 14px; margin: 8px 0; padding: 0 12px 12px; }
+.recipe.act .rbody { padding: 0; border: 0; }
+.rmeta.clip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 56vw; }
+.rprog.none { background: none; color: var(--muted); font-weight: 500; padding: 3px 0; }
+.rbody > h3 { font: 500 1.15rem/1.2 var(--display); margin: 14px 0 2px; display: flex; align-items: baseline; gap: 8px; }
+.rbody > h3 small { font: 600 .8rem var(--body); color: var(--gold-deep); background: var(--mist); border-radius: 99px; padding: 2px 9px; }
+.itools .icon { margin-left: auto; }
+.recipe.flat .rsec + .rsec { margin-top: 20px; }
