@@ -628,3 +628,13 @@ select.pill.on { background-color: var(--ink); border-color: var(--ink); }
 .qform { margin: 4px 0 8px; }
 .more .fld.wide { grid-column: 1 / -1; }
 .day-h .vegline, span.vegline { display: inline-flex; margin: 2px 0 0; }
+
+/* dúvida no texto, cardápio com hierarquia */
+.inl { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--gold-deep); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; min-height: 0; }
+.qform .ghost { padding: 0; }
+.day-sum strong { font-size: 1.12rem; color: var(--ink); }
+.day-sum .extra { color: var(--ink); margin-top: 6px; }
+.day-sum small.cat { color: var(--gold-deep); font-weight: 700; font-size: .78rem; letter-spacing: .01em; margin: 0 0 1px; }
+.day-sum small.ppl { color: var(--muted); font-size: .84rem; margin-top: 6px; }
+.day-sum .vegline, .day-sum .tag { margin-top: 6px; }
+.day.veg .date b { color: var(--ok); }
