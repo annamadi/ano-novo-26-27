@@ -17,7 +17,14 @@
   // nomes antigos, para os dados que ainda não foram renomeados no banco
   const WHEN_OLD = { "Antecipado, se congelar": "Antes da viagem", "Semana da viagem (até 26/12)": "Antes da viagem", "Compra à parte": "Antes da viagem", "Fresco / repor lá": "Lá, durante a semana", "A confirmar": "A definir" };
   const SEC_OLD = { "Mercado": "Mercearia", "Açougue / Peixaria": "Açougue e peixaria", "Casa": "Casa e descartáveis", "Feira": "Hortifruti" };
-  const whenOf = i => WHEN_OLD[i.when_buy] || i.when_buy || "";
+  // Black Friday é uma marcação por cima do momento real: até BF_UNTIL o item aparece no grupo da Black Friday, depois volta para o momento dele
+  const BF = WHEN[0], BF_UNTIL = "2026-11-30";
+  const bfCol = () => !client || !S.ingredients[0] || "bf" in S.ingredients[0];
+  const bfLive = () => new Date().toLocaleDateString("sv") <= BF_UNTIL;
+  const realWhen = i => { const w = WHEN_OLD[i.when_buy] || i.when_buy || ""; return bfCol() && w === BF ? "Antes da viagem" : w; };
+  const isBF = i => bfCol() ? !!i.bf || i.when_buy === BF : i.when_buy === BF;
+  const whenOf = i => bfCol() ? (isBF(i) && bfLive() ? BF : realWhen(i)) : (WHEN_OLD[i.when_buy] || i.when_buy || "");
+  const whenOpts = i => [...new Set((bfCol() ? WHEN.slice(1) : WHEN).concat(realWhen(i) || []))].map(w => `<option ${w === realWhen(i) ? "selected" : ""}>${esc(w)}</option>`).join("");
   const secOf = i => SEC_OLD[i.sector] || i.sector || "";
   const isFreeze = i => !!i.can_freeze || i.when_buy === "Antecipado, se congelar";
   const SECTORS = ["Mercearia", "Hortifruti", "Frios e laticínios", "Açougue e peixaria", "Padaria", "Bebidas", "Congelados", "Casa e descartáveis"];
@@ -147,7 +154,7 @@
       else throw r.error;
     });
     const has = (t, c) => !S[t][0] || c in S[t][0];
-    if (!has("recipes", "reviewed") || !has("ingredients", "paid") || !has("extras", "store") || !has("ingredients", "bought_by") || !has("ingredients", "can_freeze") || !has("recipes", "brought") || !has("recipe_items", "checked_by")) needsSetup = true;
+    if (!has("recipes", "reviewed") || !has("ingredients", "paid") || !has("extras", "store") || !has("ingredients", "bought_by") || !has("ingredients", "can_freeze") || !has("recipes", "brought") || !has("recipe_items", "checked_by") || !has("ingredients", "bf")) needsSetup = true;
     applyQueue();
   }
   // ao voltar para o site: envia o que ficou na fila e busca o que os outros mudaram
@@ -218,7 +225,9 @@
   const isRev = r => { if (!CK()) return !!r.reviewed; const l = S.recipe_items.filter(i => i.recipe_id === r.id); return l.length > 0 && l.every(isChk); };
   const LEAF = `<svg class="leaf" viewBox="0 0 24 24" role="img" aria-label="opção vegetariana"><path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14M5 19l7-7"/></svg>`;
   const vegItems = r => S.recipe_items.filter(i => i.recipe_id === r.id && i.veg === "sim").sort(byPos).map(i => (get("ingredients", i.ingredient_id) || {}).name).filter(Boolean);
-  const dayVegOk = d => !!d.veg_option || S.menu.some(m => { const r = m.day_id === d.id && get("recipes", m.recipe_id); return r && (r.block === VEG || vegItems(r).length); });
+  // o que a pessoa vegetariana come no dia: receitas à parte e ingredientes com folha
+  const dayVeg = d => S.menu.filter(m => m.day_id === d.id).sort(byPos).map(m => get("recipes", m.recipe_id)).filter(Boolean).flatMap(r => r.block === VEG ? [r.name] : vegItems(r)).join(", ");
+  const dayVegOk = d => S.menu.some(m => { const r = m.day_id === d.id && get("recipes", m.recipe_id); return r && (r.block === VEG || vegItems(r).length); });
   // ingrediente -> receitas do cardápio que usam ele e ainda não foram conferidas
   function unreviewed() {
     const m = new Map();
@@ -281,7 +290,7 @@
     document.querySelectorAll("#sub button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY, shOld = view.querySelector(".sheet"), shY = shOld ? shOld.scrollTop : 0;
     revMap = unreviewed(); bulk.clear();
-    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-08.sql).</p>` : "") +
+    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado (arquivo supabase/migration-09.sql).</p>` : "") +
       ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])() + datalists();
     window.scrollTo(0, y);
     const shNew = view.querySelector(".sheet"); if (shNew) shNew.scrollTop = shY;
@@ -504,7 +513,7 @@
         <button class="day-h" data-act="sheet-day" data-id="${d.id}" aria-haspopup="dialog">
           <span class="date"><b>${L.dd}</b><span>${L.wk}</span></span>
           <span class="day-sum">${ds.length ? byCat(ds).map(([b, l]) => b === "Jantar" ? `<strong>${l.map(r => esc(r.name)).join(", ")}</strong>` : `<span class="extra"><small class="cat">${esc(b)}</small>${l.map(r => esc(r.name)).join(", ")}</span>`).join("") : `<strong class="none">Sem prato definido</strong>`}
-            <small>${d.people} pessoas${d.breakfast ? "" : ", sem café da manhã"}</small>${d.veg_guest ? (dayVegOk(d) ? `<span class="tag ok">tem opção vegetariana</span>` : `<span class="tag sug">falta opção vegetariana</span>`) : ""}</span>
+            <small>${d.people} pessoas${d.breakfast ? "" : ", sem café da manhã"}</small>${d.veg_guest ? (dayVegOk(d) ? `<span class="vegline">${LEAF}<span>${esc(dayVeg(d))}</span></span>` : `<span class="tag sug">falta opção vegetariana</span>`) : ""}</span>
         </button>
       </article>`;
     }).join("")}</section>`}
@@ -591,25 +600,28 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         const more = ui.open.has(it.id), cp = cups(g, it.qty);
         const ck = CK(), by = checkers(it), mine = by.some(n => norm(n) === norm(who || "eu"));
         const tg = `${ck ? (by.length ? "" : it.suggested ? `<span class="tag sug">sugestão da IA</span>` : `<span class="tag new">novo</span>`) : it.suggested && !r.reviewed ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}`;
-        const chk = ck ? `<button class="ckb" data-act="check" data-id="${it.id}" aria-pressed="${by.length > 0}" aria-label="${mine ? "Tirar minha conferência de" : "Conferi"} ${esc(g.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : "";
-        if (!more) return `<li class="ro">${chk}<button class="itro" data-act="open" data-key="${it.id}" aria-expanded="false" aria-label="Editar ${esc(g.name)}">
+        const ckBtn = ck ? `<button class="ckb" data-act="check" data-id="${it.id}" aria-pressed="${by.length > 0}" aria-label="${mine || (by.length && by.every(n => norm(n) === "caderno")) ? "Tirar a conferência de" : "Conferi"} ${esc(g.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : "";
+        if (!more) return `<li class="ro">${ckBtn}<button class="itro" data-act="open" data-key="${it.id}" aria-expanded="false" aria-label="Editar ${esc(g.name)}">
           <span class="itn">${esc(g.name)}${it.veg === "sim" ? LEAF : ""}</span><b>${esc(fmtQty(it.qty, g.unit))}</b>
           ${cp || it.note || tg ? `<span class="itx">${cp ? `<small>${cp}</small>` : ""}${it.note ? `<small>${esc(it.note)}</small>` : ""}${tg}</span>` : ""}</button></li>`;
         return `<li class="it">
-          <div class="ithead">${chk}<button class="itro on" data-act="open" data-key="${it.id}" aria-expanded="true" aria-label="Fechar ${esc(g.name)}"><span class="itn">${esc(g.name)}${it.veg === "sim" ? LEAF : ""}</span><b>${esc(fmtQty(it.qty, g.unit))}</b></button></div>
+          <div class="ithead">${ckBtn}<button class="itro on" data-act="open" data-key="${it.id}" aria-expanded="true" aria-label="Fechar ${esc(g.name)}"><span class="itn">${esc(g.name)}${it.veg === "sim" ? LEAF : ""}</span><b>${esc(fmtQty(it.qty, g.unit))}</b></button></div>
           <div class="itedit">
             <input class="iname" data-act="repoint" data-id="${it.id}" value="${esc(g.name)}" data-sug="ings" autocomplete="off" aria-label="Ingrediente">
             <input class="iqty" data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="qty" data-num="1" value="${esc(nf.format(it.qty || 0).replace(/\./g, ""))}" inputmode="decimal" aria-label="Quantidade">
             <span class="unit">${esc(g.unit)}</span>
             <button class="x" data-act="del" data-t="recipe_items" data-id="${it.id}" aria-label="Tirar ${esc(g.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button>
           </div>
-          ${ck ? `<p class="ckby">${by.length ? `Conferido por ${esc(by.join(", "))}.` : it.suggested ? "Sugestão da IA: ninguém conferiu ainda." : "Novo: ninguém conferiu ainda."} Discorda? Abra uma dúvida na receita.</p>` : tg ? `<div class="tags">${tg}</div>` : ""}
+          ${ck ? `<p class="ckby">${by.length ? `Conferido por ${esc(by.join(", "))}.` : it.suggested ? "Sugestão da IA: ninguém conferiu ainda." : "Novo: ninguém conferiu ainda."}</p>
+          ${hasCol("pendencias", "recipe_id") ? (ui.open.has("q-" + it.id) ? `<form class="newrow one qform" data-form="add-pend" data-recipe="${r.id}" data-about="${esc(g.name)}" data-item="${it.id}"><input name="subject" placeholder="O que você quer perguntar ou contestar?" required aria-label="Dúvida sobre ${esc(g.name)}"><button class="btn">Enviar</button></form>`
+            : `<button class="ghost qbtn" data-act="open" data-key="q-${it.id}">Abrir dúvida sobre este ingrediente</button>`) : ""}` : tg ? `<div class="tags">${tg}</div>` : ""}
           ${more ? `<div class="more">
             ${dens(g) ? `<label class="fld">Em xícaras${cp ? ` (hoje: ${cp})` : ""}<input data-act="cups" data-id="${it.id}" inputmode="decimal" placeholder="ex.: 1,5"></label>` : ""}
             <label class="fld">Observação${inp("recipe_items", it.id, "note", it.note)}</label>
             ${g.id ? `<label class="fld">Seção do mercado${inp("ingredients", g.id, "sector", secOf(g), 'data-sug="sectors" autocomplete="off"')}</label>
             <label class="fld">Loja${inp("ingredients", g.id, "store", g.store, 'data-sug="stores" autocomplete="off" placeholder="Mercado, atacado, feira…"')}</label>
-            <label class="fld">Momento da compra<select data-act="set" data-t="ingredients" data-id="${g.id}" data-f="when_buy">${[...new Set(WHEN.concat(whenOf(g) || []))].map(w => `<option ${w === whenOf(g) ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>` : ""}
+            <label class="fld">Momento da compra<select data-act="set" data-t="ingredients" data-id="${g.id}" data-f="when_buy">${whenOpts(g)}</select></label>${bfCol() ? chk("ingredients", g.id, "bf", isBF(g), "Tentar comprar na Black Friday (27/11)") : ""}` : ""}
+            ${g.id ? `<div class="fld wide">${chk("ingredients", g.id, "from_home", isHome(g), "Alguém leva de casa (não comprar; vai para a aba Levar)")}</div>` : ""}
             ${g.id ? `<div class="fld">Responsável por este ingrediente<div class="pickwrap">${pickBtn(g.id, g.owner)}</div>${pickPanel("ingredients", g.id, g.owner)}</div>` : ""}
             <label class="fld">Opção vegetariana?<select data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="veg">
               <option value="" ${it.veg !== "sim" && it.veg !== "conferir" ? "selected" : ""}>Não marcado</option><option value="sim" ${it.veg === "sim" ? "selected" : ""}>Sim, serve para vegetariano</option><option value="conferir" ${it.veg === "conferir" ? "selected" : ""}>Conferir rótulo</option></select></label>
@@ -704,6 +716,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           i.bought && i.bought_by ? `<span class="tag ok">pago por ${esc(i.bought_by)}</span>` : "",
           g !== "sector" && secOf(i) ? `<span class="tag">${esc(secOf(i))}</span>` : "",
           g !== "when_buy" && whenOf(i) && !isHome(i) ? `<span class="tag">${esc(whenOf(i))}</span>` : "",
+          bfCol() && isBF(i) && !isHome(i) && whenOf(i) !== BF ? `<span class="tag">era Black Friday</span>` : "",
           isFreeze(i) && !isHome(i) ? `<span class="tag">congelar</span>` : "",
           g !== "store" && i.store ? `<span class="tag">${esc(i.store)}</span>` : ""].filter(Boolean);
           return open || t.length <= 2 ? t.join("") : t.slice(0, 2).join("") + `<span class="tag">+${t.length - 2}</span>`; })()}</span>
@@ -714,7 +727,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           <label class="fld">Unidade${inp("ingredients", i.id, "unit", i.unit, 'data-sug="units" autocomplete="off"')}</label>
           <label class="fld">Como comprar (embalagem)${inp("ingredients", i.id, "buy_hint", i.buy_hint)}${stale ? `<span class="stale">Escrito quando o total era ${esc(fmtQty(Number(i.hint_qty), i.unit))}. Atualize ou apague.</span>` : ""}</label>
           <div class="fld">Responsável<div class="pickwrap">${pickBtn(i.id, i.owner)}</div>${pickPanel("ingredients", i.id, i.owner)}</div>
-          ${isHome(i) ? "" : `<label class="fld">Momento da compra<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="when_buy">${[...new Set(WHEN.concat(whenOf(i) || []))].map(w => `<option ${w === whenOf(i) ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>`}
+          ${isHome(i) ? "" : `<label class="fld">Momento da compra<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="when_buy">${whenOpts(i)}</select></label>${bfCol() ? chk("ingredients", i.id, "bf", isBF(i), "Tentar comprar na Black Friday (27/11)") : ""}`}
           <label class="fld">Seção do mercado${inp("ingredients", i.id, "sector", secOf(i), 'data-sug="sectors" autocomplete="off"')}</label>
           <label class="fld">Valor pago (R$)<input data-act="set" data-t="ingredients" data-id="${i.id}" data-f="paid" data-num="1" value="${esc(numIn(i.paid))}" inputmode="decimal" placeholder="0,00"></label>
           ${isHome(i) || !hasCol("ingredients", "bought_by") ? "" : `<label class="fld">Quem pagou<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought_by">${payOpts(i.bought_by)}</select></label>`}
@@ -1007,6 +1020,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       if (t === "ingredients" && f === "bought" && hasCol(t, "bought_by")) patch.bought_by = v ? (cur.bought_by || who) : "";
       if (t === "extras" && f === "done" && cur.buy && hasCol(t, "bought_by")) patch.bought_by = v ? (cur.bought_by || who) : "";
       if (t === "ingredients" && f === "buy_hint" && hasCol(t, "hint_qty")) patch.hint_qty = (shopping().get(id) || {}).qty ?? null;
+      if (t === "ingredients" && f === "bf" && !v && (get(t, id) || {}).when_buy === BF) patch.when_buy = "Antes da viagem";
       if (t === "ingredients" && f === "from_home" && !v && (get(t, id) || {}).when_buy === HOME) patch.when_buy = "A confirmar";
       if (ui.tab !== "fun" && ((t === "extras" && f === "buy") || (t === "ingredients" && f === "from_home"))) toast((t === "extras") === !!v ? "Foi para a lista de compras." : "Foi para a lista de levar.");
       update(t, id, patch, force);
@@ -1157,7 +1171,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     else if (act === "check") {
       const it = get("recipe_items", el.dataset.id); if (!it) return;
       const me = who || "eu", by = checkers(it), has = by.some(n => norm(n) === norm(me));
-      update("recipe_items", it.id, { checked_by: (has ? by.filter(n => norm(n) !== norm(me)) : by.concat(me)).join(", ") }, true);
+      const ph = n => norm(n) === "caderno", onlyPh = by.length > 0 && by.every(ph);
+      // só o marcador da importação: o toque desmarca; com o meu nome: sai o meu nome e o marcador; senão entra o meu nome
+      update("recipe_items", it.id, { checked_by: (onlyPh ? [] : has ? by.filter(n => norm(n) !== norm(me) && !ph(n)) : by.concat(me)).join(", ") }, true);
     }
     else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
     else if (act === "ui-set") { ui[el.dataset.f] = el.dataset.v; if (el.dataset.f === "menuView") localStorage.setItem("an-menu-view", el.dataset.v); render(true); }
@@ -1194,7 +1210,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       toast("Receita criada como ideia. Coloque num dia do cardápio para contar nas compras.");
       const n = document.getElementById("r-" + r.id); if (n) n.scrollIntoView({ block: "center" });
     } else if (kind === "add-pend") {
-      const row = { id: uid(), kind: "Dúvida", subject: v("subject"), detail: f.querySelector('[name="detail"]') ? v("detail") : "", answer: "", done: false, pos: nextPos("pendencias") };
+      if (f.dataset.item) { ui.open.delete("q-" + f.dataset.item); toast("Dúvida aberta. Ela aparece no fim da receita e em Pendências."); }
+      const row = { id: uid(), kind: "Dúvida", subject: (f.dataset.about ? f.dataset.about + ": " : "") + v("subject"), detail: f.querySelector('[name="detail"]') ? v("detail") : "", answer: "", done: false, pos: nextPos("pendencias") };
       if (f.dataset.recipe) row.recipe_id = f.dataset.recipe;
       add("pendencias", row);
     } else if (kind === "add-extra") {
