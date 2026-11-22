@@ -830,3 +830,22 @@ h2.hrow { flex-wrap: wrap; }
 @media (min-width: 900px) {
   .cal { min-width: 0; grid-template-columns: repeat(var(--n, 8), minmax(0, 1fr)); }
 }
+
+/* Como funciona */
+.helplink { margin: 14px 0 0; text-align: center; }
+.steps { list-style: none; counter-reset: st; margin: 10px 0 22px; padding: 0; display: grid; gap: 16px; max-width: 62ch; }
+.steps li { counter-increment: st; display: grid; grid-template-columns: 38px 1fr; column-gap: 10px; }
+.steps li::before { content: counter(st); grid-row: 1 / span 3; font: 400 2.3rem/1 var(--display); color: var(--gold-deep); }
+.steps b { font-weight: 600; }
+.steps span { color: var(--muted); font-size: .95rem; line-height: 1.45; }
+.steps .inl { justify-self: start; min-height: 36px; font-size: .92rem; }
+.legend { margin: 10px 0 12px; border: 1px solid var(--line); border-radius: 14px; background: #fff; overflow: hidden; max-width: 62ch; }
+.legend > div { display: grid; grid-template-columns: 118px 1fr; gap: 12px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.legend > div:last-child { border-bottom: 0; }
+.legend dt { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.legend dd { margin: 0; font-size: .93rem; line-height: 1.45; }
+.legend .ckb { width: 30px; height: 30px; cursor: default; }
+.legend .ckb.on svg { background: var(--ok); border-color: var(--ok); stroke: #fff; }
+.legend .leaf, .legend .qdot { margin: 0; }
+.legend .vflag { border: 0; padding: 0; margin: 0; }
+.legend .tag { white-space: nowrap; }

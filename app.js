@@ -5,9 +5,9 @@
   let who = "";
   const TABLES = ["ingredients", "recipes", "recipe_items", "days", "menu", "pendencias", "extras", "people", "activities", "trash", "comments", "private"];
   const OPTIONAL = new Set(["people", "activities", "trash", "comments", "private"]);
-  const TABS = ["start", "menu", "recipes", "home", "fun", "shop", "take", "mine", "pend", "cfg"];
-  const SEC = { start: "inicio", menu: "plano", recipes: "plano", home: "plano", fun: "plano", shop: "compras", take: "levar", mine: "minha", pend: "pend", cfg: "cfg" };
-  const TITLE = { start: "Início", menu: "Cardápio", recipes: "Receitas", home: "Casa", fun: "Entretenimento", shop: "Compras", take: "Levar", mine: "Minha lista", pend: "Pendências", cfg: "Ajustes" };
+  const TABS = ["start", "menu", "recipes", "home", "fun", "shop", "take", "mine", "pend", "cfg", "help"];
+  const SEC = { start: "inicio", menu: "plano", recipes: "plano", home: "plano", fun: "plano", shop: "compras", take: "levar", mine: "minha", pend: "pend", cfg: "cfg", help: "cfg" };
+  const TITLE = { start: "Início", menu: "Cardápio", recipes: "Receitas", home: "Casa", fun: "Entretenimento", shop: "Compras", take: "Levar", mine: "Minha lista", pend: "Pendências", cfg: "Ajustes", help: "Como funciona" };
   const PREFIX = "an_";
   const LS_KEY = "ano-novo-2627";
   const VEG = "Opção vegetariana";
@@ -318,7 +318,7 @@
     const y = window.scrollY, shOld = view.querySelector(".sheet"), shY = shOld ? shOld.scrollTop : 0;
     revMap = unreviewed(); bulk.clear();
     view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado: rode, em ordem, os arquivos supabase/migration-02.sql a migration-10.sql que ainda não rodou.</p>` : "") +
-      ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])();
+      ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine, help: vHelp }[ui.tab])();
     window.scrollTo(0, y);
     const shNew = view.querySelector(".sheet"); if (shNew) shNew.scrollTop = shY;
     document.body.classList.toggle("locked", !!shNew);
@@ -363,6 +363,7 @@
     if (t === "take") { const l = takeEntries(tot), d = c(l, isDone); return { d, n: l.length, text: `${d} de ${l.length} itens separados.` }; }
     if (t === "mine") { const me = meName(), l = [...buyEntries(tot), ...takeEntries(tot)].filter(en => isMine(en.r.owner, me)), d = c(l, isDone); return { d, n: l.length, text: me ? `${d} de ${l.length} itens de ${me} resolvidos.` : "Cadastre as pessoas do grupo." }; }
     if (t === "cfg") return { d: 0, n: 0, text: "Pessoas do grupo, cópia de segurança, lixeira e saída." };
+    if (t === "help") return { d: 0, n: 0, text: "O que fazer aqui e o que cada sinal quer dizer." };
     if (t === "pend") { const d = c(S.pendencias, p => p.done); return { d, n: S.pendencias.length, text: `${d} de ${S.pendencias.length} pendências resolvidas.` }; }
     if (t === "recipes") { const l = S.recipes.filter(r => recipeCount(r) && r.block !== "Casa"), d = c(l, isRev); return { d, n: l.length, text: `${d} de ${l.length} receitas do cardápio conferidas.` }; }
     if (t === "home") {
@@ -380,7 +381,7 @@
   function acct() {
     const on = ui.open.has("acct"), name = client ? who : "Local";
     return `<span class="acctbox"><button class="avatar" data-act="open" data-key="acct" aria-haspopup="menu" aria-expanded="${on}" aria-label="Conta de ${esc(name)}"><i>${esc(initials(name))}</i><span>${esc(name)}</span></button>
-      ${on ? `<span class="amenu" role="menu"><button role="menuitem" data-go="cfg">Ajustes</button>${client ? `<button role="menuitem" data-act="logout">Sair</button>` : ""}</span>` : ""}</span>`;
+      ${on ? `<span class="amenu" role="menu"><button role="menuitem" data-go="cfg">Ajustes</button><button role="menuitem" data-go="help">Como funciona</button>${client ? `<button role="menuitem" data-act="logout">Sair</button>` : ""}</span>` : ""}</span>`;
   }
   const HWAVE = `<svg class="hwave" viewBox="0 0 900 30" preserveAspectRatio="none" aria-hidden="true">${[0, 1, 2].map(k => { const y = 6 + k * 9, a = k % 2 ? 5 : -5; return `<path d="M-20 ${y} C 60 ${y + a}, 140 ${y - a}, 220 ${y} S 380 ${y + a}, 460 ${y} S 620 ${y - a}, 700 ${y} S 860 ${y + a}, 940 ${y}"/>`; }).join("")}</svg>`;
   function header() {
@@ -1011,6 +1012,28 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       render(true); toast(`Cópia restaurada: ${n} registros.`);
     } catch (e) { console.error(e); bk.busy = false; render(true); toast(`A restauração parou: ${e.message}. Nada foi apagado; tente de novo.`); }
   }
+  function vHelp() {
+    const CKS = on => `<span class="ckb${on ? " on" : ""}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`;
+    const row = (sym, txt) => `<div><dt>${sym}</dt><dd>${txt}</dd></div>`;
+    return `<p class="lead">O site junta o cardápio, as compras e o que cada pessoa leva. O que você muda aparece para o grupo na hora.</p>
+    <h2>O que fazer</h2>
+    <ol class="steps">
+      <li><b>Confira as receitas que você conhece</b><span>Abra a receita e marque cada ingrediente que está certo, com a quantidade. Se algo estiver errado, toque no nome e ajuste.</span><button class="inl" data-go="recipes">Abrir Receitas</button></li>
+      <li><b>Escolha o que você compra ou leva</b><span>Em Compras e em Levar, toque no item e ponha o seu nome. Tudo que é seu aparece junto em Minha lista.</span><button class="inl" data-go="shop">Abrir Compras</button></li>
+      <li><b>Responda as pendências</b><span>São as dúvidas do grupo. As que citam o seu nome aparecem com um número no ícone de Pendências.</span><button class="inl" data-go="pend">Abrir Pendências</button></li>
+    </ol>
+    <h2>O que cada sinal quer dizer</h2>
+    <dl class="legend">
+      ${row(CKS(false) + CKS(true), "Conferência de um ingrediente. Fica verde quando alguém confirma que ele e a quantidade estão certos.")}
+      ${row(`<span class="tag sug">sugestão da IA</span>`, "Quantidade estimada. Ninguém conferiu ainda.")}
+      ${row(`<span class="tag new">novo</span>`, "Alguém acrescentou depois e ninguém conferiu ainda.")}
+      ${row(LEAF_H, "Ingrediente da alternativa vegetariana do prato.")}
+      ${row(`<span class="vflag miss">${LEAF_H}falta vegetariana</span>`, "O dia tem alguém vegetariano e nenhum prato atende. Vira <q>a conferir</q> quando existe uma opção, e <q>ok</q> depois que ela é conferida.")}
+      ${row(`<i class="qdot"></i>`, "Em Compras: a quantidade vem de uma receita que ainda não foi conferida e pode mudar.")}
+      ${row(`<b class="mention">@Nome</b>`, "Num comentário, escreva @ e o nome de alguém do grupo para avisar a pessoa.")}
+    </dl>
+    <p class="hint">Apagou algo sem querer? Fica 7 dias na lixeira, em Ajustes. Para qualquer outra dúvida, crie uma pendência.</p>`;
+  }
   function vCfg() {
     const addP = ui.open.has("newperson"), CH = `<svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`;
     const people = `<h2>Pessoas do grupo <small>${S.people.length}</small></h2>
@@ -1082,6 +1105,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${tile("pend", "pend", "Pendências", open, "", "em aberto", "", (n => n ? `<span class="tile-a">${n === 1 ? "1 marca você" : n + " marcam você"}</span>` : "")(S.pendencias.filter(tagsMe).length))}
       ${tile("recipes", "plano", "Receitas conferidas", cnt(act, isRev), `/${act.length}`, "confira antes de alguém comprar", "wide")}
     </div>
+    <p class="helplink"><button class="ghost" data-go="help">Como funciona o site</button></p>
 `;
   }
 
