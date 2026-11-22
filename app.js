@@ -440,10 +440,11 @@
     return true;
   }
   function rRow(r) {
-    return `<li class="xrow ${r.brought_done ? "done" : ""}" data-name="${esc(norm(r.name))}">
+    const open = ui.open.has("own-" + r.id);
+    return `<li class="xrow rrow ${r.brought_done ? "done" : ""}" data-name="${esc(norm(r.name))}">
       ${tick("recipes", r.id, "brought_done", r.brought_done, "Separado: " + r.name)}
-      <button class="rowlink" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}<small>receita levada pronta</small></button><span></span>
-      <div class="xmeta">${pickBtn(r.id, r.owner)}</div>
+      <div class="xmain static"><button class="xname rlink" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}</button>
+        <span class="chips"><button class="tag ${r.owner ? "who" : "sug"} tagpick" data-act="open" data-key="own-${r.id}" aria-expanded="${open}" aria-label="Responsável por ${esc(r.name)}: ${esc(r.owner || "ninguém")}. Trocar">${esc(r.owner || "sem responsável")}</button><span class="tag">receita pronta</span></span></div>
       ${pickPanel("recipes", r.id, r.owner)}
     </li>`;
   }
@@ -460,7 +461,8 @@
     entries.forEach(en => { const k = keyOf(en, g); (groups.get(k) || groups.set(k, []).get(k)).push(en); });
     const order = [...groups.keys()].sort((a, b) => g === "when_buy" ? ((WHEN.indexOf(a) + 99) % 99) - ((WHEN.indexOf(b) + 99) % 99) : (a === NONE[g]) - (b === NONE[g]) || a.localeCompare(b, "pt"));
     return order.map(k => {
-      const l = groups.get(k).sort((a, b) => (isDone(a) - isDone(b)) || nameOf(a).localeCompare(nameOf(b), "pt")), d = l.filter(isDone).length;
+      const own = en => String(en.r.owner || "").trim();
+      const l = groups.get(k).sort((a, b) => (isDone(a) - isDone(b)) || (g === "owner" ? 0 : (!own(a) - !own(b)) || own(a).localeCompare(own(b), "pt")) || nameOf(a).localeCompare(nameOf(b), "pt")), d = l.filter(isDone).length;
       const key = `g-${scope}-${g}-${k}`, open = ui.open.has(key) !== defOpen;
       bulk.set(key, { name: k, list: l });
       return `<section class="grp">

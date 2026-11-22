@@ -718,3 +718,10 @@ h2.sec small { font: 600 .82rem var(--body); color: var(--gold-deep); background
 .rsec .pend li { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 8px 0; margin: 0; }
 .pacts { flex-wrap: nowrap; }
 .pacts .acts { margin-left: auto; flex: none; }
+
+/* receita levada pronta com o mesmo tamanho de etiqueta dos outros itens */
+.xmain.static { cursor: default; }
+.rlink { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; text-align: left; color: var(--ink); cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 4px; }
+.tagpick { cursor: pointer; font-family: inherit; position: relative; }
+.tagpick::after { content: ""; position: absolute; inset: -10px -6px; }
+.rrow .pickpanel { grid-column: 1 / -1; }
