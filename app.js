@@ -1012,6 +1012,20 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       render(true); toast(`Cópia restaurada: ${n} registros.`);
     } catch (e) { console.error(e); bk.busy = false; render(true); toast(`A restauração parou: ${e.message}. Nada foi apagado; tente de novo.`); }
   }
+  // instalar como app: no Android o Chrome entrega o evento e o botão abre a instalação; no iPhone só dá para explicar o caminho
+  let installEvt = null;
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; if (ui.tab === "help" || ui.tab === "start") render(); });
+  window.addEventListener("appinstalled", () => { installEvt = null; if (ui.tab === "help" || ui.tab === "start") render(); });
+  const isApp = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  function installBox() {
+    if (isApp()) return "";
+    const SHARE = `<svg class="shico" viewBox="0 0 24 24" role="img" aria-label="Compartilhar"><path d="M12 15V3.5M8 7l4-4 4 4M6 11H5v9h14v-9h-1"/></svg>`;
+    return `<h2>Ter o site como app</h2>
+    ${installEvt ? `<p class="hint">Fica com ícone na tela inicial e abre em tela cheia. Continua precisando de internet.</p><button class="btn primary" data-act="install">Instalar no celular</button>`
+      : isIOS() ? `<ol class="howinst"><li>Toque em ${SHARE} Compartilhar, na barra do navegador.</li><li>Escolha <q>Adicionar à Tela de Início</q>.</li><li>Abra pelo ícone novo e entre uma vez com seu username.</li></ol>`
+      : `<ol class="howinst"><li>No Chrome do celular, abra o menu ⋮.</li><li>Escolha <q>Adicionar à tela inicial</q> e depois <q>Instalar</q>.</li><li>Abra pelo ícone novo e entre uma vez com seu username.</li></ol>`}`;
+  }
   function vHelp() {
     const CKS = on => `<span class="ckb${on ? " on" : ""}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`;
     const row = (sym, txt) => `<div><dt>${sym}</dt><dd>${txt}</dd></div>`;
@@ -1032,7 +1046,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${row(`<i class="qdot"></i>`, "Em Compras: a quantidade vem de uma receita que ainda não foi conferida e pode mudar.")}
       ${row(`<b class="mention">@Nome</b>`, "Num comentário, escreva @ e o nome de alguém do grupo para avisar a pessoa.")}
     </dl>
-    <p class="hint">Apagou algo sem querer? Fica 7 dias na lixeira, em Ajustes. Para qualquer outra dúvida, crie uma pendência.</p>`;
+    <p class="hint">Apagou algo sem querer? Fica 7 dias na lixeira, em Ajustes. Para qualquer outra dúvida, crie uma pendência.</p>
+    ${installBox()}`;
   }
   function vCfg() {
     const addP = ui.open.has("newperson"), CH = `<svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`;
@@ -1105,7 +1120,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${tile("pend", "pend", "Pendências", open, "", "em aberto", "", (n => n ? `<span class="tile-a">${n === 1 ? "1 marca você" : n + " marcam você"}</span>` : "")(S.pendencias.filter(tagsMe).length))}
       ${tile("recipes", "plano", "Receitas conferidas", cnt(act, isRev), `/${act.length}`, "confira antes de alguém comprar", "wide")}
     </div>
-    <p class="helplink"><button class="ghost" data-go="help">Como funciona o site</button></p>
+    <p class="helplink"><button class="ghost" data-go="help">Como funciona o site</button>${isApp() ? "" : installEvt ? `<button class="ghost" data-act="install">Instalar como app</button>` : `<button class="ghost" data-act="how-install">Instalar como app</button>`}</p>
 `;
   }
 
@@ -1358,6 +1373,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(`Lista copiada: ${todo2.length} ${todo2.length === 1 ? "item" : "itens"}${rid ? "" : " que faltam"}.`), () => toast("Não foi possível copiar neste navegador."));
     }
     else if (act === "backup") downloadBackup();
+    else if (act === "install") { const ev = installEvt; if (ev) { installEvt = null; ev.prompt(); ev.userChoice.then(() => render(), () => render()); } }
+    else if (act === "how-install") { go("help"); requestAnimationFrame(() => { const h = view.querySelector(".howinst, [data-act=install]"); if (h) h.scrollIntoView({ block: "center" }); }); }
     else if (act === "bk-cancel") { ui.bk = null; render(true); }
     else if (act === "bk-restore") { el.disabled = true; el.textContent = "Restaurando…"; restoreBackup(); }
     else if (act === "xlsx") exportXlsx();
