@@ -695,8 +695,10 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const vals = g => [...new Set(all.map(en => keyOf(en, g)))].sort((x, y) => g === "when_buy" ? ((WHEN.indexOf(x) + 99) % 99) - ((WHEN.indexOf(y) + 99) % 99) : (x === NONE[g]) - (y === NONE[g]) || x.localeCompare(y, "pt"));
     const FK = { fSector: "sector", fStore: "store", fWhen: "when_buy", fType: "type" };
     for (const k in FK) if (ui[k] && !vals(FK[k]).includes(ui[k])) ui[k] = "";
-    const shown = all.filter(en => passF(en, { who: ui.fWho, status: ui.fStatus, rev: ui.fRev, sector: ui.fSector, store: ui.fStore, when: ui.fWhen, type: ui.fType }));
-    const active = ["fWho", "fRev", "fSector", "fStore", "fWhen", "fType"].filter(k => ui[k]).length;
+    const noQty = en => en.k === "i" && !(tot.get(en.r.id) || {}).qty, nNoQty = all.filter(en => noQty(en) && !isDone(en)).length;
+    if (!nNoQty) ui.fNoQty = "";
+    const shown = all.filter(en => passF(en, { who: ui.fWho, status: ui.fStatus, rev: ui.fRev, sector: ui.fSector, store: ui.fStore, when: ui.fWhen, type: ui.fType }) && (!ui.fNoQty || noQty(en)));
+    const active = ["fWho", "fRev", "fSector", "fStore", "fWhen", "fType", "fNoQty"].filter(k => ui[k]).length;
     const paid = paidSum(all);
     const FDEF = [["fWho", "Pessoa", people2()], ["fSector", "Seção", vals("sector").map(x => [x, x])], ["fWhen", "Momento", vals("when_buy").map(x => [x, x])], ["fStore", "Loja", vals("store").map(x => [x, x])],
       ...(vals("type").length > 1 ? [["fType", "Comida ou item", vals("type").map(x => [x, x])]] : []), ["fRev", "Conferência", [["ok", "Já conferido"], ["todo", "A conferir"]]]];
@@ -706,7 +708,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <div class="srow">${seg3("fStatus", ["Tudo", "Falta", "Comprado"])}
         <button class="btn sm fbtn ${active ? "on" : ""}" data-act="fsheet" data-v="1" aria-haspopup="dialog">Filtros${active ? ` (${active})` : ""}</button></div>
     </div>
-    ${active ? `<div class="factive">${FDEF.filter(([k]) => ui[k]).map(([k, label, opts]) => `<button class="tagbtn" data-act="ui-set" data-f="${k}" data-v="" aria-label="Tirar filtro ${esc(label)}">${esc(label)}: ${esc((opts.find(o => o[0] === ui[k]) || [0, ui[k]])[1])} <span aria-hidden="true">✕</span></button>`).join("")}</div>` : ""}
+    ${nNoQty && !ui.fNoQty ? `<button class="mebar" data-act="ui-set" data-f="fNoQty" data-v="1"><b>${nNoQty}</b> ${nNoQty === 1 ? "item sem quantidade definida" : "itens sem quantidade definida"}<span>Ver</span></button>` : ""}
+    ${active ? `<div class="factive">${ui.fNoQty ? `<button class="tagbtn" data-act="ui-set" data-f="fNoQty" data-v="" aria-label="Tirar filtro sem quantidade">Sem quantidade <span aria-hidden="true">✕</span></button>` : ""}${FDEF.filter(([k]) => ui[k]).map(([k, label, opts]) => `<button class="tagbtn" data-act="ui-set" data-f="${k}" data-v="" aria-label="Tirar filtro ${esc(label)}">${esc(label)}: ${esc((opts.find(o => o[0] === ui[k]) || [0, ui[k]])[1])} <span aria-hidden="true">✕</span></button>`).join("")}</div>` : ""}
     ${ui.fsheet ? `<div class="sheet-bg" data-act="fsheet" data-v=""></div>
     <section class="sheet" role="dialog" aria-modal="true" aria-label="Filtros de compras">
       <header><h2>Filtros</h2><button class="btn" id="sheet-x" data-act="fsheet" data-v="">Ver ${shown.length} ${shown.length === 1 ? "item" : "itens"}</button></header>
@@ -720,7 +723,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     <p class="hint">O que vem de casa fica na aba Levar. Itens de Levar e Entretenimento marcados com "Precisa comprar" aparecem aqui.</p>
     ${unused.length ? `<details class="unused"><summary>Fora do cardápio (${unused.length})</summary>
       <p class="hint">Ingredientes que nenhuma receita ativa usa. As marcações ficam guardadas caso voltem.</p>
-      <ul class="plain">${unused.map(i => `<li><span>${esc(i.name)}</span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}">Excluir</button></li>`).join("")}</ul></details>` : ""}`;
+      <ul class="plain">${unused.map(i => `<li><span>${esc(i.name)}<small class="note from">${(l => l.length ? "de: " + l.map(esc).join(", ") : "sem receita")([...new Set(S.recipe_items.filter(x => x.ingredient_id === i.id).map(x => (get("recipes", x.recipe_id) || {}).name).filter(Boolean))])}</small></span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}">Excluir</button></li>`).join("")}</ul></details>` : ""}`;
   }
   function vItem(i, e, g) {
     const open = ui.open.has(i.id), done = i.bought, pend = revMap.get(i.id);
@@ -901,6 +904,33 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     ${groupList(take, "origin", tot, "h3", "mt") || `<p class="empty">${takeAll.length ? "Nenhum item com esses filtros." : "Nenhum item para levar. Defina os responsáveis na aba Levar."}</p>`}`;
   }
 
+  const BK_ORDER = ["people", "ingredients", "recipes", "days", "activities", "recipe_items", "menu", "extras", "pendencias", "comments"];
+  const BK_LABEL = { people: "pessoas", ingredients: "ingredientes", recipes: "receitas", days: "dias", activities: "atividades", recipe_items: "linhas de receita", menu: "pratos no cardápio", extras: "itens avulsos", pendencias: "pendências", comments: "comentários" };
+  function downloadBackup(tag = "copia") {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ exportado_em: new Date().toISOString(), dados: S }, null, 1)], { type: "application/json" }));
+    a.download = `ano-novo-${tag}-${new Date().toLocaleDateString("sv")}.json`; a.click(); URL.revokeObjectURL(a.href);
+  }
+  async function restoreBackup() {
+    const bk = ui.bk; if (!bk) return;
+    downloadBackup("antes-de-restaurar");
+    let n = 0;
+    try {
+      for (const t of BK_ORDER) {
+        let rows = bk.data[t] || []; if (!rows.length) continue;
+        if (client) {
+          // só as colunas que o banco tem hoje (a cópia pode ser mais antiga ou mais nova)
+          const cols = S[t][0] ? Object.keys(S[t][0]) : null;
+          if (cols) rows = rows.map(r => Object.fromEntries(cols.filter(c => c in r).map(c => [c, r[c]])));
+          for (let i = 0; i < rows.length; i += 200) { const { error } = await client.from(PREFIX + t).upsert(rows.slice(i, i + 200)); if (error) throw new Error(`${BK_LABEL[t]}: ${error.message}`); }
+        } else rows.forEach(r => { const k = S[t].findIndex(x => x.id === r.id); if (k >= 0) S[t][k] = r; else S[t].push(r); });
+        n += rows.length;
+      }
+      ui.bk = null;
+      if (client) await fetchAll(); else saveLocal();
+      render(true); toast(`Cópia restaurada: ${n} registros.`);
+    } catch (e) { console.error(e); render(true); toast(`A restauração parou: ${e.message}. Nada foi apagado; tente de novo.`); }
+  }
   function vCfg() {
     const people = `<h2>Pessoas do grupo</h2>
       <p class="hint">São os nomes que aparecem nas opções de responsável.</p>
@@ -909,7 +939,13 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     return `${people}
     <h2>Cópia e exportação</h2>
     <p class="hint">A cópia de segurança guarda tudo num arquivo. A planilha traz compras, o que levar, cardápio, receitas e pendências.</p>
-    <div class="newrow"><button class="btn" data-act="backup">Baixar cópia de segurança</button><button class="btn" data-act="xlsx">Exportar planilha</button></div>
+    <div class="newrow"><button class="btn" data-act="backup">Baixar cópia de segurança</button><button class="btn" data-act="xlsx">Exportar planilha</button>
+      <label class="btn filebtn">Restaurar de uma cópia<input type="file" id="bk-file" accept="application/json,.json" hidden></label></div>
+    ${ui.bk ? `<div class="bkbox" role="group" aria-label="Restaurar cópia de segurança">
+      <p><b>${esc(ui.bk.name)}</b>, feita em ${esc(fmtWhen(ui.bk.when) || "data desconhecida")}.</p>
+      <p>${BK_ORDER.map(t => `${(ui.bk.data[t] || []).length} ${BK_LABEL[t]}`).join(", ")}.</p>
+      <p class="hint">Restaurar traz de volta o que foi apagado e desfaz as alterações feitas depois dessa cópia. O que foi criado depois dela continua no site. Antes de restaurar, o site baixa uma cópia do estado atual.</p>
+      <div class="newrow"><button class="btn primary" data-act="bk-restore">Restaurar agora</button><button class="ghost" data-act="bk-cancel">Cancelar</button></div></div>` : ""}
     ${noTrash ? "" : `<h2>Lixeira <small>${S.trash.length}</small></h2>
     <p class="hint">O que foi excluído fica aqui por 7 dias e pode voltar.</p>
     ${S.trash.length ? `<ul class="plain">${[...S.trash].sort((a, b) => String(b.deleted_at).localeCompare(String(a.deleted_at))).map(t => `<li><span>${esc(t.label)} <small class="note">${KIND[t.tbl] || ""}${t.deleted_by ? ", excluído por " + esc(t.deleted_by) : ""}</small></span><button class="ghost" data-act="restore" data-id="${t.id}">Restaurar</button></li>`).join("")}</ul>` : `<p class="empty">Vazia.</p>`}`}
@@ -1034,6 +1070,14 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
 
   view.addEventListener("change", e => {
     const el = e.target, act = el.dataset.act;
+    if (el.id === "bk-file") {
+      const file = el.files && el.files[0]; if (!file) return;
+      return void file.text().then(txt => {
+        const j = JSON.parse(txt), data = j && j.dados;
+        if (!data || !Array.isArray(data.recipes) || !Array.isArray(data.ingredients)) throw new Error("formato");
+        ui.bk = { name: file.name, when: j.exportado_em, data }; render(true);
+      }).catch(() => { ui.bk = null; render(true); toast("Esse arquivo não é uma cópia de segurança deste site."); });
+    }
     if (act === "plan") {
       const g = get("ingredients", el.dataset.id), v = el.value; if (!g) return;
       const patch = { from_home: v === "take" }; if (hasHouse()) patch.at_house = v === "house";
@@ -1200,11 +1244,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       const text = `${b.name}\n${todo2.map(line).join("\n")}`;
       (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(`Lista copiada: ${todo2.length} ${todo2.length === 1 ? "item" : "itens"}${rid ? "" : " que faltam"}.`), () => toast("Não foi possível copiar neste navegador."));
     }
-    else if (act === "backup") {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([JSON.stringify({ exportado_em: new Date().toISOString(), dados: S }, null, 1)], { type: "application/json" }));
-      a.download = `ano-novo-copia-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
-    }
+    else if (act === "backup") downloadBackup();
+    else if (act === "bk-cancel") { ui.bk = null; render(true); }
+    else if (act === "bk-restore") { el.disabled = true; el.textContent = "Restaurando…"; restoreBackup(); }
     else if (act === "xlsx") exportXlsx();
     else if (act === "restore") { $("#toast").classList.remove("on"); restore(el.dataset.id); }
     else if (act === "pend-out") update("pendencias", el.dataset.id, { recipe_id: null }, true);
@@ -1230,7 +1272,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     else if (act === "clear-rec") { ui.rBlock = ui.rIn = ui.rRev = ""; render(true); }
     else if (act === "clear-take") { ui.tWho = ui.tStatus = ""; render(true); }
     else if (act === "fsheet") { ui.fsheet = !!el.dataset.v; render(true); const x = document.getElementById("sheet-x"); if (x) x.focus(); else { const b = view.querySelector(".fbtn"); if (b) b.focus(); } }
-    else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ""; render(true); }
+    else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ui.fNoQty = ""; render(true); }
     else if (act === "logout") { client.auth.signOut().then(() => location.reload()); }
   });
   view.addEventListener("submit", e => {
