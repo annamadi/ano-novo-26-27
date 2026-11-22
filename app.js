@@ -11,7 +11,8 @@
   const PREFIX = "an_";
   const LS_KEY = "ano-novo-2627";
   const VEG = "Opção vegetariana";
-  const BLOCKS = ["Jantar", VEG, "Café da manhã", "Snacks", "Sobremesa", "Bebidas", "Casa"];
+  const SIDE = "Acompanhamento";   // entra por dia, junto do prato principal
+  const BLOCKS = ["Jantar", SIDE, VEG, "Café da manhã", "Snacks", "Sobremesa", "Bebidas", "Casa"];
   const FOOD = BLOCKS.filter(b => b !== "Casa");
   const WHEN = ["Black Friday (27/11)", "Antes da viagem", "Lá, durante a semana", "A definir"];
   // nomes antigos, para os dados que ainda não foram renomeados no banco
@@ -512,7 +513,7 @@
 
   function vMenu() {
     const days = [...S.days].sort((a, b) => a.date.localeCompare(b.date));
-    const dinnerIdeas = S.recipes.filter(r => (r.block === "Jantar" || r.block === VEG) && recipeCount(r) === 0).sort(byPos);
+    const dinnerIdeas = S.recipes.filter(r => (r.block === "Jantar" || r.block === SIDE || r.block === VEG) && recipeCount(r) === 0).sort(byPos);
     const names = d => S.menu.filter(m => m.day_id === d.id).sort(byPos).map(m => get("recipes", m.recipe_id)).filter(Boolean);
     const cal = () => `<div class="hbox"><div class="calwrap"><div class="cal" style="--n:${days.length}">
       ${days.map(d => {
@@ -543,7 +544,7 @@
     <p class="hint">Marque os dias que vão ter café. Os itens do café contam uma vez, para a semana inteira.</p>
     <div class="daypick">${days.map(d => { const L = dayLabel(d, true); return `<button type="button" class="dchip" data-act="toggle-bf" data-d="${d.id}" aria-pressed="${!!d.breakfast}" aria-label="Café em ${L.wk} ${L.dd} de ${L.mon}"><b>${L.dd}</b><small>${L.wk}</small></button>`; }).join("")}</div>
     ${S.recipes.filter(r => r.block === CAFE).sort(byPos).map(r => `<button class="ghost" data-act="open-recipe" data-id="${r.id}">Ver itens do café da manhã</button>`).join("")}
-    ${foodBlocks().filter(b => b !== "Jantar" && b !== CAFE && b !== VEG).map((b, k) => {
+    ${foodBlocks().filter(b => b !== "Jantar" && b !== SIDE && b !== CAFE && b !== VEG).map((b, k) => {
       const rs = S.recipes.filter(r => r.block === b).sort(byPos); if (!rs.length) return "";
       return `<h2>${esc(b)} <small>${rs.filter(r => recipeCount(r)).length} de ${rs.length} no cardápio</small></h2>
       ${k ? "" : `<p class="hint">Ligue o que vai ter durante a semana. O que fica desligado continua guardado como ideia e não entra nas compras.</p>`}
