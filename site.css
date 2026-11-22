@@ -664,3 +664,16 @@ body.scrolled .mini { transform: none; visibility: visible; }
 .vflag.pend .leaf { stroke: var(--warn-ink); }
 .vflag.miss { background: #F6E4E4; color: var(--danger); }
 .vflag.miss .leaf { stroke: var(--danger); }
+
+/* prato principal em destaque; Início com as mesmas marcas do calendário */
+.dish.main, .sday em.main { font: 500 1.14rem/1.15 var(--display); letter-spacing: -.005em; color: var(--ink); }
+.sday em.main { margin-top: 10px; }
+.sday em.none { color: var(--muted); font-weight: 400; }
+.sday .dgrp { margin-top: 8px; width: 100%; }
+.sday .dgrp span { font-size: .84rem; font-weight: 500; color: var(--ink); }
+.sday .vflag { margin-top: auto; align-self: stretch; }
+.sday .dgrp + .vflag, .sday em + .vflag { margin-top: auto; }
+.sday { gap: 0; }
+.vflag { font-weight: 600; background: none; padding: 4px 0 0; border-top: 1px solid var(--line); border-radius: 0; margin-top: 6px; }
+.vflag.ok, .vflag.pend, .vflag.miss { background: none; }
+.calfoot .vflag { border-top: 0; padding-top: 2px; }
