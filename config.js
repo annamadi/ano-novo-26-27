@@ -5,6 +5,6 @@ window.APP_CONFIG = {
   supabaseUrl: "https://zuwtptbvtyxdacyzsijf.supabase.co",
   supabaseKey: "sb_publishable_ljv8qbWQEd081KA70kKKgA_l_0OfhVh",
   // Cada pessoa entra com o primeiro nome; o site monta "nome@loginDomain".
-  // No Supabase, crie os usuários assim: anna@anonovo.invalid, etc.
+  // No Supabase, crie os usuários assim: nome@anonovo.invalid, etc.
   loginDomain: "anonovo.invalid",
 };
