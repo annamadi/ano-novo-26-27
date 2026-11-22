@@ -318,9 +318,7 @@
     <svg class="wave" viewBox="0 0 1200 40" preserveAspectRatio="none" aria-hidden="true"><path d="M0 18 C 100 2, 200 34, 300 18 S 500 2, 600 18 S 800 34, 900 18 S 1100 2, 1200 18 V40 H0 Z"/></svg>`;
   }
   const tick = (t, id, f, val, label) => `<label class="tick"><input type="checkbox" data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" ${val ? "checked" : ""} aria-label="${esc(label)}"><span></span></label>`;
-  const datalists = () => `<datalist id="dl-ings">${S.ingredients.map(i => `<option value="${esc(i.name)}">`).join("")}</datalist>
-    <datalist id="dl-stores">${[...new Set([...S.ingredients, ...S.extras].map(i => i.store).filter(Boolean))].sort().map(o => `<option value="${esc(o)}">`).join("")}</datalist>
-    <datalist id="dl-sectors">${[...new Set(SECTORS.concat(S.ingredients.map(secOf).filter(Boolean)))].sort((a, b) => a.localeCompare(b, "pt")).map(o => `<option value="${esc(o)}">`).join("")}</datalist>`;
+  const datalists = () => "";
 
   const inp = (t, id, f, val, extra = "") => `<input data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" value="${esc(val)}" ${extra}>`;
   const chk = (t, id, f, val, label) => `<label class="chk"><input type="checkbox" data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" ${val ? "checked" : ""}><span>${label}</span></label>`;
@@ -351,7 +349,7 @@
       <div class="xmeta">${pickBtn(e.id, e.owner)}${chk("extras", e.id, "buy", e.buy, "Precisa comprar")}
         ${e.buy ? `<label class="paid">R$ <input data-act="set" data-t="extras" data-id="${e.id}" data-f="paid" data-num="1" value="${esc(numIn(e.paid))}" inputmode="decimal" placeholder="pago" aria-label="Valor pago"></label>
         ${hasCol("extras", "bought_by") ? `<select class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="bought_by" aria-label="Quem pagou">${payOpts(e.bought_by, "Quem pagou")}</select>` : ""}
-        <input class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="store" value="${esc(e.store)}" list="dl-stores" placeholder="Loja" aria-label="Loja">` : ""}
+        <input class="xstore" data-act="set" data-t="extras" data-id="${e.id}" data-f="store" value="${esc(e.store)}" data-sug="stores" autocomplete="off" placeholder="Loja" aria-label="Loja">` : ""}
         ${a ? `<span class="tag">${esc(a.name)}</span>` : ""}</div>
       ${pickPanel("extras", e.id, e.owner)}
     </li>`;
@@ -581,7 +579,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           <span class="itn">${esc(g.name)}</span><b>${esc(fmtQty(it.qty, g.unit))}</b>
           ${cp || it.note || tg ? `<span class="itx">${cp ? `<small>${cp}</small>` : ""}${it.note ? `<small>${esc(it.note)}</small>` : ""}${tg}</span>` : ""}</button></li>`;
         return `<li class="it">
-          <input class="iname" data-act="repoint" data-id="${it.id}" value="${esc(g.name)}" list="dl-ings" aria-label="Ingrediente">
+          <input class="iname" data-act="repoint" data-id="${it.id}" value="${esc(g.name)}" data-sug="ings" autocomplete="off" aria-label="Ingrediente">
           <input class="iqty" data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="qty" data-num="1" value="${esc(nf.format(it.qty || 0).replace(/\./g, ""))}" inputmode="decimal" aria-label="Quantidade">
           <span class="unit">${esc(g.unit)}</span>
           <button class="ghost" data-act="open" data-key="${it.id}" aria-expanded="true">Fechar</button>
@@ -591,8 +589,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
             ${flat === true ? "" : `<p class="hint">Trocar o nome troca o ingrediente só nesta receita. Para renomear em todas, use a aba Compras.</p>`}
             ${dens(g) ? `<label class="fld">Em xícaras${cp ? ` (hoje: ${cp})` : ""}<input data-act="cups" data-id="${it.id}" inputmode="decimal" placeholder="ex.: 1,5"></label>` : ""}
             <label class="fld">Observação${inp("recipe_items", it.id, "note", it.note)}</label>
-            ${g.id ? `<label class="fld">Seção do mercado${inp("ingredients", g.id, "sector", secOf(g), 'list="dl-sectors"')}</label>
-            <label class="fld">Loja${inp("ingredients", g.id, "store", g.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
+            ${g.id ? `<label class="fld">Seção do mercado${inp("ingredients", g.id, "sector", secOf(g), 'data-sug="sectors" autocomplete="off"')}</label>
+            <label class="fld">Loja${inp("ingredients", g.id, "store", g.store, 'data-sug="stores" autocomplete="off" placeholder="Mercado, atacado, feira…"')}</label>
             <label class="fld">Momento da compra<select data-act="set" data-t="ingredients" data-id="${g.id}" data-f="when_buy">${[...new Set(WHEN.concat(whenOf(g) || []))].map(w => `<option ${w === whenOf(g) ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>` : ""}
             ${g.id ? `<div class="fld">Responsável por este ingrediente<div class="pickwrap">${pickBtn(g.id, g.owner)}</div>${pickPanel("ingredients", g.id, g.owner)}</div>` : ""}
             <label class="fld">Vegetariano?<select data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="veg">
@@ -603,11 +601,11 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${flat === true ? "" : `<div class="itools"><button class="btn sm" data-act="open" data-key="add-${r.id}" aria-expanded="${ui.open.has("add-" + r.id)}">${ui.open.has("add-" + r.id) ? "Fechar" : "+ Ingrediente"}</button>
         <button class="ghost" data-act="copy-list" data-key="r-${r.id}">Copiar lista</button><button class="ghost" data-act="open" data-key="bulk-r-${r.id}">Responsável</button></div>${bulkPanel("r-" + r.id)}`}
       ${flat !== true && !ui.open.has("add-" + r.id) ? "" : `<form class="additem" data-form="add-item" data-id="${r.id}">
-        <input name="name" placeholder="${flat === true ? "Item" : "Ingrediente"}" list="dl-ings" required data-act="ing-hint">
+        <input name="name" placeholder="${flat === true ? "Item" : "Ingrediente"}" data-sug="ings" autocomplete="off" required data-act="ing-hint">
         <input name="qty" placeholder="Qtd" inputmode="decimal">
-        <input name="unit" placeholder="${flat === true ? "un, g, lata…" : "g, xícara…"}" autocapitalize="none">
+        <input name="unit" placeholder="${flat === true ? "un, g, lata…" : "g, xícara…"}" autocapitalize="none" data-sug="units" autocomplete="off">
         <button class="btn">Adicionar</button>
-        ${flat === true ? "" : `<div class="upick" role="group" aria-label="Unidade">${["g", "ml", "un", "xícara", "colher de sopa"].map(x => `<button type="button" class="tagbtn" data-act="unit-pick" data-v="${x}">${x}</button>`).join("")}</div><p class="hint">Xícara e colher de sopa de farinha, açúcar, manteiga, leite e parecidos são convertidas para g ou ml.</p>`}
+        ${flat === true ? "" : `<p class="hint">Xícara e colher de sopa de farinha, açúcar, manteiga, leite e parecidos são convertidas para g ou ml.</p>`}
       </form>`}
       ${flat === true ? gtools("r-" + r.id, "Definir responsável pelos itens") : ""}
       </section>
@@ -691,14 +689,14 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${open ? `<div class="ibody">
         <div class="grid2">
           <label class="fld">Nome (muda em todas as receitas)${inp("ingredients", i.id, "name", i.name)}</label>
-          <label class="fld">Unidade${inp("ingredients", i.id, "unit", i.unit)}</label>
+          <label class="fld">Unidade${inp("ingredients", i.id, "unit", i.unit, 'data-sug="units" autocomplete="off"')}</label>
           <label class="fld">Como comprar (embalagem)${inp("ingredients", i.id, "buy_hint", i.buy_hint)}${stale ? `<span class="stale">Escrito quando o total era ${esc(fmtQty(Number(i.hint_qty), i.unit))}. Atualize ou apague.</span>` : ""}</label>
           <div class="fld">Responsável<div class="pickwrap">${pickBtn(i.id, i.owner)}</div>${pickPanel("ingredients", i.id, i.owner)}</div>
           ${isHome(i) ? "" : `<label class="fld">Momento da compra<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="when_buy">${[...new Set(WHEN.concat(whenOf(i) || []))].map(w => `<option ${w === whenOf(i) ? "selected" : ""}>${esc(w)}</option>`).join("")}</select></label>`}
-          <label class="fld">Seção do mercado${inp("ingredients", i.id, "sector", secOf(i), 'list="dl-sectors"')}</label>
+          <label class="fld">Seção do mercado${inp("ingredients", i.id, "sector", secOf(i), 'data-sug="sectors" autocomplete="off"')}</label>
           <label class="fld">Valor pago (R$)<input data-act="set" data-t="ingredients" data-id="${i.id}" data-f="paid" data-num="1" value="${esc(numIn(i.paid))}" inputmode="decimal" placeholder="0,00"></label>
           ${isHome(i) || !hasCol("ingredients", "bought_by") ? "" : `<label class="fld">Quem pagou<select data-act="set" data-t="ingredients" data-id="${i.id}" data-f="bought_by">${payOpts(i.bought_by)}</select></label>`}
-          <label class="fld">Loja${inp("ingredients", i.id, "store", i.store, 'list="dl-stores" placeholder="Mercado, atacado, feira…"')}</label>
+          <label class="fld">Loja${inp("ingredients", i.id, "store", i.store, 'data-sug="stores" autocomplete="off" placeholder="Mercado, atacado, feira…"')}</label>
         </div>
         ${isHome(i) || !hasCol("ingredients", "can_freeze") ? "" : chk("ingredients", i.id, "can_freeze", isFreeze(i), "Dá para comprar antes e congelar")}
         ${chk("ingredients", i.id, "from_home", isHome(i), "Vem de casa (alguém leva, não precisa comprar; vai para a aba Levar)")}
@@ -1020,6 +1018,47 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       u.dataset.auto = g ? g.unit : "";
     }
   });
+  // Sugestões próprias: o <datalist> do navegador não abre no Android.
+  const SUG_UNITS = ["g", "kg", "ml", "L", "un", "xícara", "colher de sopa", "lata", "pacote", "maço", "garrafa", "caixa"];
+  const sugBox = document.createElement("div"); sugBox.className = "sugbox"; sugBox.hidden = true; sugBox.setAttribute("role", "listbox"); document.body.appendChild(sugBox);
+  let sugFor = null;
+  const sugSrc = kind => kind === "ings" ? S.ingredients.map(i => i.name)
+    : kind === "stores" ? [...new Set([...S.ingredients, ...S.extras].map(i => i.store).filter(Boolean))]
+    : kind === "sectors" ? [...new Set(SECTORS.concat(S.ingredients.map(secOf).filter(Boolean)))]
+    : [...new Set(SUG_UNITS.concat(S.ingredients.map(i => i.unit).filter(Boolean)))];
+  function sugHide() { sugBox.hidden = true; sugFor = null; }
+  function sugShow(el) {
+    const kind = el.dataset.sug, k = norm(el.value);
+    if (kind === "ings" && !k) return sugHide();               // ingrediente: só sugere depois de digitar
+    const seen = new Set(); let list = sugSrc(kind).filter(o => { const n = norm(o); return !seen.has(n) && seen.add(n); });
+    // unidade, loja e seção abrem com tudo; ao digitar algo diferente do que já estava, filtram
+    const typed = k && el.dataset.sugTyped === "1";
+    if (kind === "ings" || typed) list = list.filter(o => norm(o).includes(k)).sort((a, b) => (norm(b).startsWith(k) - norm(a).startsWith(k)) || a.localeCompare(b, "pt"));
+    else list = kind === "units" ? list : list.sort((a, b) => a.localeCompare(b, "pt"));
+    list = list.filter(o => norm(o) !== k || !typed && kind !== "ings").slice(0, kind === "ings" ? 8 : 30);
+    if (!list.length) return sugHide();
+    sugBox.innerHTML = list.map(o => `<button type="button" role="option" data-v="${esc(o)}"${norm(o) === k ? ' aria-selected="true"' : ""}>${esc(o)}</button>`).join("");
+    const r = el.getBoundingClientRect();
+    sugBox.style.left = Math.max(8, Math.min(r.left, innerWidth - 8 - Math.max(r.width, 180))) + scrollX + "px";
+    sugBox.style.top = r.bottom + scrollY + 4 + "px"; sugBox.style.minWidth = Math.max(r.width, 180) + "px";
+    sugBox.hidden = false; sugFor = el;
+  }
+  document.addEventListener("focusin", e => { const el = e.target; if (el.dataset && el.dataset.sug) { el.dataset.sugTyped = ""; sugShow(el); } });
+  document.addEventListener("input", e => { const el = e.target; if (el.dataset && el.dataset.sug) { el.dataset.sugTyped = "1"; sugShow(el); } });
+  document.addEventListener("focusout", e => { if (e.target === sugFor) setTimeout(() => { if (document.activeElement !== sugFor) sugHide(); }, 200); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && sugFor) sugHide(); });
+  document.addEventListener("click", e => { const el = e.target; if (el.dataset && el.dataset.sug && sugBox.hidden) { el.dataset.sugTyped = ""; sugShow(el); } });
+  document.addEventListener("pointerdown", e => { if (sugFor && e.target !== sugFor && !sugBox.contains(e.target)) sugHide(); });
+  sugBox.addEventListener("pointerdown", e => e.preventDefault());   // não tira o foco do campo
+  sugBox.addEventListener("click", e => {
+    const b = e.target.closest("button"), el = sugFor; if (!b || !el) return;
+    if (!el.isConnected) return sugHide();
+    el.value = b.dataset.v; sugHide();
+    el.dispatchEvent(new Event("input", { bubbles: true })); sugHide();
+    if (el.dataset.act && el.dataset.act !== "ing-hint") el.dispatchEvent(new Event("change", { bubbles: true }));
+    else { const f = el.form, nx = f && [...f.elements].find(x => x !== el && x.tagName === "INPUT" && !x.value); if (nx) nx.focus(); }
+  });
+
   view.addEventListener("focusout", () => setTimeout(() => { if (renderPending) render(false); }, 350));
   document.addEventListener("click", e => {
     const g = e.target.closest("[data-go]"); if (g) return go(g.dataset.go);
@@ -1028,7 +1067,6 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "back") { ui.back = null; go("menu"); }
     else if (act === "open-recipe") { ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.rec = el.dataset.id; render(true); window.scrollTo(0, 0); }
-    else if (act === "unit-pick") { const u = el.closest("form").querySelector('[name="unit"]'); u.value = el.dataset.v; u.dataset.auto = ""; el.parentNode.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b === el)); }
     else if (act === "scroll-right" || act === "scroll-left") { const sc = el.parentNode.firstElementChild; sc.scrollBy({ left: sc.clientWidth * 0.8 * (act === "scroll-left" ? -1 : 1), behavior: "smooth" }); }
     else if (act === "rec-open") { ui.rec = el.dataset.id; ui.back = null; render(true); window.scrollTo(0, 0); }
     else if (act === "rec-close") { ui.rec = null; render(true); }

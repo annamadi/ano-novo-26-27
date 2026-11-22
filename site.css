@@ -525,6 +525,7 @@ select.pill.on { background-color: var(--ink); border-color: var(--ink); }
 .hbox.more::after { width: 36px; }
 .hbox.less::before { content: ""; position: absolute; top: 0; bottom: 0; left: -16px; width: 36px; background: linear-gradient(to left, rgba(255, 255, 255, 0), #fff 80%); pointer-events: none; z-index: 1; }
 .additem .hint { grid-column: 1 / -1; margin: 0; }
-.upick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
-.upick .tagbtn { min-height: 40px; }
-.upick .tagbtn[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.sugbox { position: absolute; z-index: 40; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(22, 32, 42, .18); max-height: 232px; overflow-y: auto; padding: 4px; max-width: calc(100vw - 16px); }
+.sugbox[hidden] { display: none; }
+.sugbox button { display: block; width: 100%; text-align: left; min-height: 44px; padding: 8px 12px; border: 0; background: none; border-radius: 8px; font: inherit; color: var(--ink); cursor: pointer; }
+.sugbox button:hover, .sugbox button:active, .sugbox button[aria-selected="true"] { background: var(--mist); }
