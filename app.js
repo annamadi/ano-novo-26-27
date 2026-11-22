@@ -777,7 +777,13 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     for (const m of str.matchAll(URL_RE)) { out += part(str.slice(last, m.index)) + anchor(m[0]); last = m.index + m[0].length; }
     return out + part(str.slice(last));
   };
-  const linkList = t => { const l = [...new Set(String(t || "").match(URL_RE) || [])]; return l.length ? `<p class="links">${l.map((u, i) => { const before = String(t).slice(0, String(t).indexOf(u)).split("\n").pop().replace(/^[\d.\-\s]+/, "").replace(/[:\s]+$/, ""); return `<a class="xlink" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(before && before.length < 70 ? before : linkName(u))}</a>`; }).join("")}</p>` : ""; };
+  const LINK_ICO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7.5v9l7-4.5z"/></svg>`;
+  // links do texto como etiquetas: nome do site em destaque e, se houver, a descrição escrita antes do endereço
+  const linkList = t => { const str = String(t || ""), l = [...new Set(str.match(URL_RE) || [])]; if (!l.length) return "";
+    return `<div class="links">${l.map(u => { const before = str.slice(0, str.indexOf(u)).split("\n").pop().replace(/^[\d.\-\s]+/, "").replace(/[:\s]+$/, "");
+      const k = SITES.find(([re]) => re.test(u)), site = k ? k[1].replace("vídeo no ", "") : linkName(u);
+      const desc = before && before.length < 90 ? before.replace(new RegExp("^" + site + "[,:\\s]*", "i"), "") : "";
+      return `<a class="lchip" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${LINK_ICO}<span><b>${esc(site)}</b>${desc ? `<small>${esc(desc)}</small>` : ""}</span></a>`; }).join("")}</div>`; };
   const pendText = p => [p.subject, p.detail, ...S.comments.filter(c => c.pend_id === p.id).map(c => c.body)].join(" ");
   const myName = () => client ? (peopleNames().find(n => norm(n) === norm(who)) || who || "") : meName();
   const tagsMe = p => { const me = norm(myName()), re = mentionRe(); return !!me && !!re && !p.done && [...pendText(p).matchAll(re)].some(m => norm(m[1]) === me); };

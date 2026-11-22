@@ -611,5 +611,10 @@ body.scrolled .mini { transform: none; visibility: visible; }
 
 /* links em comentários e no modo de preparo */
 .xlink { color: var(--gold-deep); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
-.links { display: grid; gap: 4px; margin: 8px 0 0; }
-.links .xlink { min-height: 32px; display: inline-flex; align-items: center; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+.lchip { display: inline-flex; align-items: center; gap: 10px; max-width: 100%; padding: 8px 14px 8px 8px; border-radius: 12px; background: var(--mist); color: var(--ink); text-decoration: none; min-height: 48px; }
+.lchip:active { background: var(--line); }
+.lchip svg { flex: none; width: 30px; height: 30px; padding: 6px; box-sizing: border-box; border-radius: 50%; background: var(--ink); fill: var(--gold-soft); }
+.lchip span { display: grid; min-width: 0; line-height: 1.2; }
+.lchip b { font-weight: 700; font-size: .95rem; }
+.lchip small { font-size: .84rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
