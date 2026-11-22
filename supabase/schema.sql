@@ -46,7 +46,8 @@ create table if not exists an_recipe_items (
   veg text not null default '',
   note text not null default '',
   pos double precision not null default 0,
-  checked_by text not null default ''
+  checked_by text not null default '',
+  kind text not null default ''
 );
 
 create table if not exists an_days (
@@ -137,4 +138,22 @@ begin
     exception when duplicate_object then null;
     end;
   end loop;
+end $$;
+
+-- Lista particular: cada pessoa só lê e altera as próprias linhas.
+create table if not exists an_private (
+  id uuid primary key,
+  user_id uuid not null default auth.uid(),
+  item text not null default '',
+  done boolean not null default false,
+  pos double precision not null default 0
+);
+alter table an_private enable row level security;
+revoke all on an_private from anon;
+grant select, insert, update, delete on an_private to authenticated;
+drop policy if exists "so a dona" on an_private;
+create policy "so a dona" on an_private for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+do $$ begin
+  alter publication supabase_realtime add table an_private;
+exception when duplicate_object then null;
 end $$;

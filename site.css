@@ -634,3 +634,11 @@ body.scrolled .mini { transform: none; visibility: visible; }
 /* separadores por tipo na lista de ingredientes */
 .items .ksep { list-style: none; margin: 14px 0 0; padding: 0 0 2px; font-size: .78rem; font-weight: 700; color: var(--gold-deep); border-bottom: 1px solid var(--line); }
 .items .ksep:first-child { margin-top: 4px; }
+
+/* grupo do ingrediente e lista particular */
+.kindpick { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; font-size: .95rem; color: var(--muted); }
+.kindpick select { width: auto; flex: 1 1 150px; margin: 0; }
+.plist .prow { display: grid; grid-template-columns: 44px 1fr 44px; gap: 4px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.plist .prow input:not([type=checkbox]) { border-color: transparent; background: none; padding-left: 4px; }
+.plist .prow input:not([type=checkbox]):focus { border-color: var(--line); background: #fff; }
+.plist .prow.done input:not([type=checkbox]) { color: var(--muted); text-decoration: line-through; }

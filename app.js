@@ -3,8 +3,8 @@
 (() => {
   const CFG = window.APP_CONFIG || {};
   let who = "";
-  const TABLES = ["ingredients", "recipes", "recipe_items", "days", "menu", "pendencias", "extras", "people", "activities", "trash", "comments"];
-  const OPTIONAL = new Set(["people", "activities", "trash", "comments"]);
+  const TABLES = ["ingredients", "recipes", "recipe_items", "days", "menu", "pendencias", "extras", "people", "activities", "trash", "comments", "private"];
+  const OPTIONAL = new Set(["people", "activities", "trash", "comments", "private"]);
   const TABS = ["start", "menu", "recipes", "home", "fun", "shop", "take", "mine", "pend", "cfg"];
   const SEC = { start: "inicio", menu: "plano", recipes: "plano", home: "plano", fun: "plano", shop: "compras", take: "levar", mine: "minha", pend: "pend", cfg: "cfg" };
   const TITLE = { start: "Início", menu: "Cardápio", recipes: "Receitas", home: "Casa", fun: "Entretenimento", shop: "Compras", take: "Levar", mine: "Minha lista", pend: "Pendências", cfg: "Ajustes" };
@@ -44,7 +44,7 @@
   const S = Object.fromEntries(TABLES.map(t => [t, []]));
   const ui = { tab: localStorage.getItem("an-tab") || "start", open: new Set(), group: "when_buy", fWho: "", fStatus: "", fRev: "", fSector: "", fStore: "", fWhen: "", fType: "", tWho: "", tStatus: "", mStatus: "", mSector: "", pStatus: "todo", pRec: "", rq: "", rBlock: "", rIn: "", rRev: "", q: "", me: "", menuView: localStorage.getItem("an-menu-view") || "list" };
   if (!TABS.includes(ui.tab)) ui.tab = "start";
-  let client = null, renderPending = false, needsSetup = false, noTrash = false, noComments = false, revMap = new Map();
+  let client = null, renderPending = false, needsSetup = false, noTrash = false, noComments = false, noPrivate = false, revMap = new Map();
 
   const $ = s => document.querySelector(s);
   const view = $("#view");
@@ -162,11 +162,11 @@
     res.forEach((r, i) => {
       const t = TABLES[i];
       if (!r.error) S[t] = r.data;
-      else if (OPTIONAL.has(t)) { needsSetup = true; S[t] = []; if (t === "trash") noTrash = true; if (t === "comments") noComments = true; }
+      else if (OPTIONAL.has(t)) { needsSetup = true; S[t] = []; if (t === "trash") noTrash = true; if (t === "comments") noComments = true; if (t === "private") noPrivate = true; }
       else throw r.error;
     });
     const has = (t, c) => !S[t][0] || c in S[t][0];
-    if (!has("recipes", "reviewed") || !has("ingredients", "paid") || !has("extras", "store") || !has("ingredients", "bought_by") || !has("ingredients", "can_freeze") || !has("recipes", "brought") || !has("recipe_items", "checked_by") || !has("ingredients", "bf") || !has("ingredients", "at_house")) needsSetup = true;
+    if (!has("recipes", "reviewed") || !has("ingredients", "paid") || !has("extras", "store") || !has("ingredients", "bought_by") || !has("ingredients", "can_freeze") || !has("recipes", "brought") || !has("recipe_items", "checked_by") || !has("ingredients", "bf") || !has("ingredients", "at_house") || !has("recipe_items", "kind")) needsSetup = true;
     applyQueue();
   }
   // ao voltar para o site: envia o que ficou na fila e busca o que os outros mudaram
@@ -314,7 +314,7 @@
     document.querySelectorAll("#sub button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY, shOld = view.querySelector(".sheet"), shY = shOld ? shOld.scrollTop : 0;
     revMap = unreviewed(); bulk.clear();
-    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado: rode, em ordem, os arquivos supabase/migration-02.sql a migration-09.sql que ainda não rodou.</p>` : "") +
+    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado: rode, em ordem, os arquivos supabase/migration-02.sql a migration-10.sql que ainda não rodou.</p>` : "") +
       ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine }[ui.tab])();
     window.scrollTo(0, y);
     const shNew = view.querySelector(".sheet"); if (shNew) shNew.scrollTop = shY;
@@ -600,12 +600,12 @@
     });
   }
   // tipo do ingrediente dentro da receita, só para ordenar e separar a lista na conferência
-  const KIND_LABEL = ["Principais", "Extras", "Temperos", "Molhos e condimentos", "Outros"];
+  const KIND_LABEL = ["Principais", "Acompanhamentos", "Extras", "Temperos", "Molhos e condimentos", "Outros"];
   const KIND_RE = [
-    [4, /carvao|acendedor|copinho|filtro de papel|papel |guardanapo|detergente|saco de lixo|^gelo$/],
-    [3, /ketchup|mostarda|maionese|shoyu|molho|tare$|azeite|^oleo|vinagre|extrato/],
-    [2, /^sal$|sal grosso|flor de sal|pimenta|paprica|cominho|chilli|oregano|^alho$|coentro|cebolinha|^salsa|louro|canela|baunilha|fermento|bicarbonato|^gergelim|furikake|wasabi|gengibre|tempero/],
-    [1, /batata palha|milho \(lata\)|crispy|granulado|avela|gotas de chocolate|^bacon/]];
+    [5, /carvao|acendedor|copinho|filtro de papel|papel |guardanapo|detergente|saco de lixo|^gelo$/],
+    [4, /ketchup|mostarda|maionese|shoyu|molho|tare$|azeite|^oleo|vinagre|extrato/],
+    [3, /^sal$|sal grosso|flor de sal|pimenta|paprica|cominho|chilli|oregano|^alho$|coentro|cebolinha|^salsa|louro|canela|baunilha|fermento|bicarbonato|^gergelim|furikake|wasabi|gengibre|tempero/],
+    [2, /batata palha|milho \(lata\)|crispy|granulado|avela|gotas de chocolate|^bacon/]];
   function ingKind(name, recipeName) {
     const k = norm(name), first = k.split(/[\s(]/)[0];
     if (first.length >= 4 && norm(recipeName).includes(first)) return 0;   // maionese na "Maionese de batata" é o principal
@@ -619,7 +619,9 @@
       </div>
       <button class="btn danger" data-act="del" data-t="recipes" data-id="${r.id}">Excluir receita</button></div>`;
     const open = !!flat, page = flat === "page", st = recipeStatus(r);
-    const kOf = i => flat === true ? 0 : ingKind((get("ingredients", i.ingredient_id) || {}).name, r.name);
+    const autoK = i => ingKind((get("ingredients", i.ingredient_id) || {}).name, r.name);
+    // o grupo escolhido à mão vale; sem escolha, o site decide pelo nome
+    const kOf = i => flat === true ? 0 : KIND_LABEL.includes(i.kind) ? KIND_LABEL.indexOf(i.kind) : autoK(i);
     const items = S.recipe_items.filter(i => i.recipe_id === r.id).sort((a, b) => kOf(a) - kOf(b) || byPos(a, b));
     const kinds = new Set(items.map(kOf));
     const qs = S.pendencias.filter(p => p.recipe_id === r.id).sort((a, b) => (a.done - b.done) || byPos(a, b)), qOpen = qs.filter(p => !p.done).length;
@@ -666,6 +668,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
             <label class="fld">Loja${inp("ingredients", g.id, "store", g.store, 'data-sug="stores" autocomplete="off" placeholder="Mercado, atacado, feira…"')}</label>
             ${planSel(g)}` : ""}
             ${g.id ? `<div class="fld">Responsável por este ingrediente<div class="pickwrap">${pickBtn(g.id, g.owner)}</div>${pickPanel("ingredients", g.id, g.owner)}</div>` : ""}
+            ${hasCol("recipe_items", "kind") && flat !== true ? `<label class="fld">Grupo nesta receita<select data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="kind"><option value="">Automático (${KIND_LABEL[autoK(it)]})</option>${KIND_LABEL.map(k => `<option ${it.kind === k ? "selected" : ""}>${k}</option>`).join("")}</select></label>` : ""}
             <label class="fld">Alternativa vegetariana?<select data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="veg">
               <option value="" ${it.veg !== "sim" && it.veg !== "conferir" ? "selected" : ""}>Não marcado</option><option value="sim" ${it.veg === "sim" ? "selected" : ""}>Sim, é o que substitui a carne</option><option value="conferir" ${it.veg === "conferir" ? "selected" : ""}>Conferir rótulo</option></select></label>
             <button class="btn sm done" data-act="open" data-key="${it.id}" aria-expanded="true">Fechar</button>
@@ -679,6 +682,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         <input name="qty" placeholder="Qtd" inputmode="decimal">
         <input name="unit" placeholder="${flat === true ? "un, g, lata…" : "g, xícara…"}" autocapitalize="none" data-sug="units" autocomplete="off">
         <button class="btn">Adicionar</button>
+        ${hasCol("recipe_items", "kind") && flat !== true ? `<label class="kindpick">Grupo <select name="kind"><option value="">Automático</option>${KIND_LABEL.map(k => `<option>${k}</option>`).join("")}</select></label>` : ""}
         <label class="secpick" hidden>Ingrediente novo. Seção do mercado <select name="sector"><option value="">Escolher…</option>${SECTORS.map(x => `<option>${esc(x)}</option>`).join("")}</select></label>
         ${flat === true ? "" : `<p class="hint">Xícara e colher de sopa de farinha, açúcar, manteiga, leite e parecidos são convertidas para g ou ml.</p>`}
       </form>`}
@@ -930,7 +934,11 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     <h2 class="sec">Comprar ${cnt(buyAll)}</h2>
     ${groupList(buy, "sector", tot, "h3", "mb") || `<p class="empty">${buyAll.length ? "Nenhuma compra com esses filtros." : "Nenhuma compra. Defina os responsáveis na aba Compras."}</p>`}
     <h2 class="sec">Levar ${cnt(takeAll)}</h2>
-    ${groupList(take, "origin", tot, "h3", "mt") || `<p class="empty">${takeAll.length ? "Nenhum item com esses filtros." : "Nenhum item para levar. Defina os responsáveis na aba Levar."}</p>`}`;
+    ${groupList(take, "origin", tot, "h3", "mt") || `<p class="empty">${takeAll.length ? "Nenhum item com esses filtros." : "Nenhum item para levar. Defina os responsáveis na aba Levar."}</p>`}
+    ${norm(me) === norm(myName()) && !noPrivate ? (pv => `<h2 class="sec">Só para mim <small>${pv.filter(p => p.done).length}/${pv.length}</small></h2>
+    <p class="hint">Só você vê esta lista, em qualquer aparelho em que entrar. Boa para a sua mala.</p>
+    <ul class="shop xlist plist">${pv.map(p => `<li class="prow ${p.done ? "done" : ""}">${tick("private", p.id, "done", p.done, "Feito: " + p.item)}<input data-act="set" data-t="private" data-id="${p.id}" data-f="item" value="${esc(p.item)}" aria-label="Item"><button class="x" data-act="del" data-t="private" data-id="${p.id}" aria-label="Tirar ${esc(p.item)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></li>`).join("")}</ul>
+    <form class="newrow one" data-form="add-private"><input name="item" placeholder="Adicionar à minha lista particular" required><button class="btn">Adicionar</button></form>`)([...S.private].sort((a, b) => (a.done - b.done) || byPos(a, b))) : ""}`;
   }
 
   const BK_ORDER = ["people", "ingredients", "recipes", "days", "activities", "recipe_items", "menu", "extras", "pendencias", "comments"];
@@ -1326,7 +1334,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         if (!S.recipe_items.some(i => i.ingredient_id === old.id)) { update("ingredients", old.id, { unit }); ing = old; }
         else { ing = ensureIngredient(`${old.name} (${unit})`, unit); toast(`${old.name} já está na lista em ${old.unit}. Criei "${ing.name}" para não misturar as medidas.`); }
       } else ing = ensureIngredient(v("name"), unit, f.querySelector('[name="sector"]') ? v("sector") : "");
-      add("recipe_items", { id: uid(), recipe_id: f.dataset.id, ingredient_id: ing.id, qty, suggested: false, veg: "", note: "", pos: nextPos("recipe_items") });
+      const row = { id: uid(), recipe_id: f.dataset.id, ingredient_id: ing.id, qty, suggested: false, veg: "", note: "", pos: nextPos("recipe_items") };
+      if (hasCol("recipe_items", "kind") && f.querySelector('[name="kind"]')) row.kind = v("kind");
+      add("recipe_items", row);
     } else if (kind === "new-recipe") {
       const r = { id: uid(), name: v("name"), block: v("block"), reviewed: false, reviewed_by: "", serves: "", weekly: false, notes: "", prep: "", pos: nextPos("recipes") };
       ui.open.delete("newrec"); ui.rec = r.id; add("recipes", r); window.scrollTo(0, 0);
@@ -1337,6 +1347,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       const row = { id: uid(), kind: "Dúvida", subject: (f.dataset.about ? f.dataset.about + ": " : "") + v("subject"), detail: f.querySelector('[name="detail"]') ? v("detail") : "", answer: "", done: false, pos: nextPos("pendencias") };
       if (f.dataset.recipe) row.recipe_id = f.dataset.recipe;
       add("pendencias", row);
+    } else if (kind === "add-private") {
+      add("private", { id: uid(), item: v("item"), done: false, pos: nextPos("private") });
     } else if (kind === "add-extra") {
       add("extras", { id: uid(), grp: "Levar", item: v("item"), owner: "", done: false, buy: f.dataset.buy === "1", activity_id: f.dataset.activity || null, pos: nextPos("extras") });
     } else if (kind === "new-activity") {
