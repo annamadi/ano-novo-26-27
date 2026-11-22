@@ -11,6 +11,7 @@
   const PREFIX = "an_";
   const LS_KEY = "ano-novo-2627";
   const VEG = "Opção vegetariana";
+  const CAL_KIND = { "Acompanhamento": "side", "Opção vegetariana": "veg", "Sobremesa": "sweet" };
   const SIDE = "Acompanhamento";   // entra por dia, junto do prato principal
   const BLOCKS = ["Jantar", SIDE, VEG, "Café da manhã", "Snacks", "Sobremesa", "Bebidas", "Casa"];
   const FOOD = BLOCKS.filter(b => b !== "Casa");
@@ -520,11 +521,13 @@
         const [y, m, dd] = d.date.split("-").map(Number), wd = new Date(y, m - 1, dd).getDay(), L = dayLabel(d, true), ds = names(d);
         return `<button class="calday ${d.veg_guest ? "veg" : ""}" data-act="goto-day" data-id="${d.id}" aria-label="Abrir ${L.wk} ${L.dd}">
           <span class="calnum"><b>${L.dd}</b> ${L.wk}, ${L.mon}</span>
-          ${byCat(ds).map(([b, l]) => l.map(r => `<span class="dish">${b === "Jantar" ? "" : `<small class="cat">${esc(b === VEG ? "Vegetariana" : b)}</small>`}${esc(short(r.name))}</span>`).join("")).join("") || `<span class="dish none">sem prato</span>`}
-          <span class="calfoot">${d.people} pessoas${d.veg_guest && !dayVegOk(d) ? `<br><b>${dayVegState(d) === "pend" ? "opção vegetariana a conferir" : "falta opção vegetariana"}</b>` : ""}</span>
+          ${byCat(ds).map(([b, l]) => b === "Jantar" ? l.map(r => `<span class="dish main">${esc(short(r.name))}</span>`).join("")
+            : `<span class="dgrp k-${CAL_KIND[b] || "x"}"><span class="sr">${esc(b)}: </span>${l.map(r => `<span>${esc(short(r.name))}</span>`).join("")}</span>`).join("") || `<span class="dish none">sem prato</span>`}
+          <span class="calfoot">${d.people} pessoas${d.veg_guest ? (st => `<span class="vflag ${st}">${LEAF}${st === "ok" ? "vegetariana ok" : st === "pend" ? "vegetariana a conferir" : "falta vegetariana"}</span>`)(dayVegState(d)) : ""}</span>
         </button>`;
       }).join("")}</div></div>${MORE}</div>
-      <p class="hint">Toque num dia para abrir e editar. A faixa verde marca os dias que precisam de opção vegetariana.</p>`;
+      <p class="callegend" aria-hidden="true"><span class="k-side">Acompanhamento</span><span class="k-veg">Opção vegetariana</span><span class="k-sweet">Sobremesa</span></p>
+      <p class="hint">Toque num dia para abrir e editar. A faixa verde no topo marca os dias que precisam de opção vegetariana.</p>`;
     return `<p class="lead">Toque num dia para trocar o prato. A lista de compras se refaz sozinha com o que estiver aqui.</p>
     <div class="seg" role="group" aria-label="Visualização">
       <button data-act="ui-set" data-f="menuView" data-v="list" aria-pressed="${ui.menuView !== "cal"}">Lista</button>
