@@ -855,3 +855,4 @@ h2.hrow { flex-wrap: wrap; }
 .howinst { margin: 8px 0 12px; padding-left: 22px; max-width: 62ch; display: grid; gap: 8px; line-height: 1.45; }
 .howinst li::marker { color: var(--gold-deep); font-weight: 700; }
 .shico { width: 20px; height: 20px; vertical-align: -4px; fill: none; stroke: var(--gold-deep); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.instfor { margin: 14px 0 0; font: 700 .84rem var(--body); color: var(--gold-deep); }

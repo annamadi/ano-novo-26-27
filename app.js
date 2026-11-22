@@ -1023,8 +1023,16 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const SHARE = `<svg class="shico" viewBox="0 0 24 24" role="img" aria-label="Compartilhar"><path d="M12 15V3.5M8 7l4-4 4 4M6 11H5v9h14v-9h-1"/></svg>`;
     return `<h2>Ter o site como app</h2>
     ${installEvt ? `<p class="hint">Fica com ícone na tela inicial e abre em tela cheia. Continua precisando de internet.</p><button class="btn primary" data-act="install">Instalar no celular</button>`
-      : isIOS() ? `<ol class="howinst"><li>Toque em ${SHARE} Compartilhar, na barra do navegador.</li><li>Escolha <q>Adicionar à Tela de Início</q>.</li><li>Abra pelo ícone novo e entre uma vez com seu username.</li></ol>`
-      : `<ol class="howinst"><li>No Chrome do celular, abra o menu ⋮.</li><li>Escolha <q>Adicionar à tela inicial</q> e depois <q>Instalar</q>.</li><li>Abra pelo ícone novo e entre uma vez com seu username.</li></ol>`}`;
+      : (() => {
+        const last = `<li>Abra pelo ícone novo e entre uma vez com seu username.</li>`, add = `<li>Role a lista, escolha <q>Adicionar à Tela de Início</q> e confirme em <q>Adicionar</q>.</li>`;
+        const L = {
+          safari: `<h3 class="instfor">iPhone, pelo Safari</h3><ol class="howinst"><li>Toque em ${SHARE} Compartilhar, na barra de baixo. Se não aparecer, ele fica dentro do menu de três pontos.</li>${add}${last}</ol>`,
+          crios: `<h3 class="instfor">iPhone, pelo Chrome</h3><ol class="howinst"><li>Toque em ${SHARE} Compartilhar, no canto direito da barra de endereço.</li>${add}${last}</ol>`,
+          android: `<h3 class="instfor">Android, pelo Chrome</h3><ol class="howinst"><li>Abra o menu ⋮, no canto de cima.</li><li>Escolha <q>Adicionar à tela inicial</q> e depois <q>Instalar</q>.</li>${last}</ol>`
+        };
+        const ua = navigator.userAgent, order = isIOS() ? (/CriOS/.test(ua) ? ["crios", "safari"] : ["safari", "crios"]) : /Android/.test(ua) ? ["android"] : ["android", "safari", "crios"];
+        return order.map(k => L[k]).join("");
+      })()}`;
   }
   function vHelp() {
     const CKS = on => `<span class="ckb${on ? " on" : ""}" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>`;
