@@ -331,7 +331,31 @@
     onScroll();
     if (ui.tab === "shop" && ui.q) filterShop();
     if (ui.tab === "recipes" && ui.rq) filterRecipes();
+    syncHistory();
   }
+  // Botão "voltar" do celular: cada troca de tela (aba, receita aberta, janela do dia ou de filtros) vira um passo no histórico
+  const navSnap = () => JSON.stringify({ t: ui.tab, r: ui.rec || null, s: ui.sheet || null, f: !!ui.fsheet, b: ui.back || null });
+  let navCur = null, navY = 0;
+  function syncHistory() {
+    const s = navSnap();
+    try {
+      if (navCur === null) { history.replaceState({ nav: s, y: 0 }, ""); navCur = s; return; }
+      if (s === navCur) return;
+      history.replaceState({ nav: navCur, y: navY }, "");   // guarda onde a tela anterior estava rolada
+      history.pushState({ nav: s, y: 0 }, ""); navCur = s;
+    } catch { navCur = s; }
+  }
+  window.addEventListener("scroll", () => { navY = window.scrollY; }, { passive: true });
+  window.addEventListener("popstate", e => {
+    const st = e.state; if (!st || !st.nav) return;
+    let o; try { o = JSON.parse(st.nav); } catch { return; }
+    if (!TABS.includes(o.t)) return;
+    ui.tab = o.t; ui.rec = o.r && get("recipes", o.r) ? o.r : null; ui.sheet = o.s && get("days", o.s) ? o.s : null; ui.fsheet = !!o.f; ui.back = o.b || null;
+    ui.open.delete("acct"); localStorage.setItem("an-tab", ui.tab);
+    navCur = navSnap(); noDraft = true;
+    render(true);
+    const y = st.y || 0; requestAnimationFrame(() => window.scrollTo(0, y));
+  });
   const meName = () => { const names = peopleNames(); return ui.me || names.find(n => norm(n) === norm(who)) || who || names[0] || ""; };
   function headStat(tot) {
     const c = (l, f) => l.filter(f).length, t = ui.tab;
