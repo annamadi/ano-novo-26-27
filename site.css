@@ -785,3 +785,27 @@ h2.hrow { align-items: center; }
 .htools .ghost { padding: 0; min-height: 40px; font: 600 .88rem var(--body); color: var(--muted); text-decoration-color: var(--line); letter-spacing: 0; }
 .hdoubts { margin-top: 12px; }
 .hdoubts .pend { margin-top: 6px; }
+
+/* passada de beleza: Ajustes e Início */
+.ppl li { gap: 12px; min-height: 56px; }
+.pav { font-style: normal; flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--mist); color: var(--ink); font: 500 1.05rem var(--display); }
+.ppl .you { margin-left: 8px; font: 600 .78rem var(--body); color: var(--gold-deep); background: var(--mist); border-radius: 99px; padding: 2px 8px; }
+.ppl .x { color: var(--muted); opacity: .7; }
+.ppl .x:focus-visible, .ppl .x:active { color: var(--danger); opacity: 1; }
+.actlist { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #fff; margin: 8px 0 4px; }
+.actrow { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 60px; background: none; border: 0; border-bottom: 1px solid var(--line); text-align: left; cursor: pointer; font: inherit; color: var(--ink); }
+.actrow:last-child { border-bottom: 0; }
+.actrow:active { background: var(--mist); }
+.actrow > span { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.actrow b { font-weight: 600; }
+.actrow small { font-size: .86rem; color: var(--muted); line-height: 1.35; }
+.actrow .go { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.actrow.out b { color: var(--danger); }
+.filebtn { overflow: hidden; }
+.filebtn .sr { left: 0; top: 0; opacity: 0; }
+.filebtn:focus-within { outline: 2px solid var(--ink); outline-offset: -2px; }
+.tile { position: relative; overflow: hidden; padding-bottom: 18px; }
+.tile-bar { position: absolute; left: 14px; right: 14px; bottom: 10px; height: 3px; border-radius: 99px; background: var(--mist); }
+.tile-bar i { display: block; height: 100%; border-radius: 99px; background: var(--gold); min-width: 0; }
+.tile-t { font-size: .9rem; }
+.ppl li > span { flex: 1; min-width: 0; }

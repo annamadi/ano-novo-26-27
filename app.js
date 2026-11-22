@@ -988,15 +988,19 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     } catch (e) { console.error(e); bk.busy = false; render(true); toast(`A restauração parou: ${e.message}. Nada foi apagado; tente de novo.`); }
   }
   function vCfg() {
-    const people = `<h2>Pessoas do grupo</h2>
-      <p class="hint">São os nomes que aparecem nas opções de responsável.</p>
-      <ul class="plain">${[...S.people].sort(byPos).map(p => `<li><span>${esc(p.name)}</span><button class="x" data-act="del" data-t="people" data-id="${p.id}" aria-label="Tirar ${esc(p.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></li>`).join("")}</ul>
-      <form class="newrow" data-form="add-person"><input name="name" placeholder="Nome da pessoa" required><button class="btn">Adicionar pessoa</button></form>`;
+    const addP = ui.open.has("newperson"), CH = `<svg class="go" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>`;
+    const people = `<h2>Pessoas do grupo <small>${S.people.length}</small></h2>
+      <p class="hint">Os nomes que aparecem nas opções de responsável.</p>
+      <ul class="plain ppl">${[...S.people].sort(byPos).map(p => `<li><i class="pav" aria-hidden="true">${esc(initials(p.name))}</i><span>${esc(p.name)}${client && norm(p.name) === norm(who) ? `<small class="you">você</small>` : ""}</span><button class="x" data-act="del" data-t="people" data-id="${p.id}" aria-label="Tirar ${esc(p.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></li>`).join("")}</ul>
+      <div class="itools"><button class="btn sm" data-act="open" data-key="newperson" aria-expanded="${addP}">${addP ? "Fechar" : "+ Pessoa"}</button></div>
+      ${addP ? `<form class="newrow one" data-form="add-person"><input name="name" placeholder="Nome da pessoa" required><button class="btn">Adicionar</button></form>` : ""}`;
     return `${people}
     <h2>Cópia e exportação</h2>
-    <p class="hint">A cópia de segurança guarda tudo num arquivo, menos as listas particulares. A planilha traz compras, o que levar, cardápio, receitas e pendências.</p>
-    <div class="newrow"><button class="btn" data-act="backup">Baixar cópia de segurança</button><button class="btn" data-act="xlsx">Exportar planilha</button>
-      <label class="btn filebtn">Restaurar de uma cópia<input type="file" id="bk-file" class="sr" accept="application/json,.json"></label></div>
+    <div class="actlist">
+      <button class="actrow" data-act="backup"><span><b>Baixar cópia de segurança</b><small>Guarda tudo num arquivo, menos as listas particulares.</small></span>${CH}</button>
+      <button class="actrow" data-act="xlsx"><span><b>Exportar planilha</b><small>Compras, o que levar, cardápio, receitas e pendências.</small></span>${CH}</button>
+      <label class="actrow filebtn"><span><b>Restaurar de uma cópia</b><small>Traz de volta o que foi apagado ou alterado depois dela.</small></span>${CH}<input type="file" id="bk-file" class="sr" accept="application/json,.json"></label>
+    </div>
     ${ui.bk ? `<div class="bkbox" role="group" aria-label="Restaurar cópia de segurança">
       <p><b>${esc(ui.bk.name)}</b>, feita em ${esc(fmtWhen(ui.bk.when) || "data desconhecida")}.</p>
       <p>${BK_ORDER.map(t => `${(ui.bk.data[t] || []).length} ${BK_LABEL[t]}`).join(", ")}.</p>
@@ -1007,8 +1011,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     <ul class="plain">${o.map(i => `<li><span>${esc(i.name)}</span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}">Excluir</button></li>`).join("")}</ul>` : "")(S.ingredients.filter(i => !S.recipe_items.some(x => x.ingredient_id === i.id) && !S.trash.some(t => ((t.payload || {}).recipe_items || []).some(x => x.ingredient_id === i.id))).sort((a, b) => a.name.localeCompare(b.name, "pt")))}
     ${noTrash ? "" : `<h2>Lixeira <small>${S.trash.length}</small></h2>
     <p class="hint">O que foi excluído fica aqui por 7 dias e pode voltar.</p>
-    ${S.trash.length ? `<ul class="plain">${[...S.trash].sort((a, b) => String(b.deleted_at).localeCompare(String(a.deleted_at))).map(t => `<li><span>${esc(t.label)} <small class="note">${KIND[t.tbl] || ""}${t.deleted_by ? ", excluído por " + esc(t.deleted_by) : ""}</small></span><button class="ghost" data-act="restore" data-id="${t.id}">Restaurar</button></li>`).join("")}</ul>` : `<p class="empty">Vazia.</p>`}`}
-    ${client ? `<h2>Sair</h2><p class="hint">Você entrou como ${esc(who)}. O login fica salvo neste aparelho até sair.</p><button class="btn" data-act="logout">Sair deste aparelho</button>` : ""}`;
+    ${S.trash.length ? `<ul class="plain">${[...S.trash].sort((a, b) => String(b.deleted_at).localeCompare(String(a.deleted_at))).map(t => `<li><span>${esc(t.label)} <small class="note">${KIND[t.tbl] || ""}${t.deleted_by ? ", excluído por " + esc(t.deleted_by) : ""}</small></span><button class="ghost" data-act="restore" data-id="${t.id}">Restaurar</button></li>`).join("")}</ul>` : `<p class="empty">Nada na lixeira.</p>`}`}
+    ${client ? `<h2>Sair</h2><div class="actlist"><button class="actrow out" data-act="logout"><span><b>Sair deste aparelho</b><small>Você entrou como ${esc(who)}. O login fica salvo aqui até sair.</small></span>${CH}</button></div>` : ""}`;
   }
 
   const MORE = `<button class="more-btn" data-act="scroll-right" aria-label="Ver mais"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button><button class="more-btn back" data-act="scroll-left" aria-label="Voltar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>`;
@@ -1033,7 +1037,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const cnt = (l, f) => l.filter(f).length;
     // quase tudo sem dono ainda: convite neutro; sobrando poucos: alerta com o número
     const noOwner = (n, total) => !n ? "" : n > total / 2 ? `<span class="tile-a soft">Distribuir responsáveis</span>` : `<span class="tile-a">${n} sem responsável</span>`;
-    const tile = (tab, sec, title, big, small, sub, cls = "", alert = "") => `<button class="tile ${cls}" data-go="${tab}" data-sec="${sec}"><span class="tile-t">${title}</span><span class="tile-n">${big}<i>${small}</i></span><span class="tile-s">${sub}</span>${alert}</button>`;
+    const tile = (tab, sec, title, big, small, sub, cls = "", alert = "") => `<button class="tile ${cls}" data-go="${tab}" data-sec="${sec}"><span class="tile-t">${title}</span><span class="tile-n">${big}<i>${small}</i></span><span class="tile-s">${sub}</span>${alert}${typeof small === "string" && small[0] === "/" && Number(small.slice(1)) ? `<span class="tile-bar" aria-hidden="true"><i style="width:${Math.round(100 * big / Number(small.slice(1)))}%"></i></span>` : ""}</button>`;
     const waves = [0, 1, 2, 3, 4, 5, 6].map(k => { const y = 10 + k * 12, a = k % 2 ? 7 : -7; return `<path d="M-20 ${y} C 60 ${y + a}, 140 ${y - a}, 220 ${y} S 380 ${y + a}, 460 ${y} S 620 ${y - a}, 700 ${y} S 860 ${y + a}, 940 ${y}"/>`; }).join("");
     return `<section class="hero">
       <div class="top-row"><span>Ano Novo 26/27</span>${acct()}</div>
@@ -1051,7 +1055,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${tile("shop", "compras", "Compras", cnt(buy, isDone), `/${buy.length}`, "itens comprados", "", noOwner(buyNo, buy.length))}
       ${tile("take", "levar", "Levar", cnt(take, isDone), `/${take.length}`, "itens separados", "", noOwner(takeNo, take.length))}
       ${tile("mine", "minha", "Minha lista", cnt(mine, isDone), `/${mine.length}`, me ? `itens de ${esc(me)}` : "sem pessoa definida")}
-      ${tile("pend", "pend", "Pendências", open, "", open === 1 ? "em aberto" : "em aberto")}
+      ${tile("pend", "pend", "Pendências", open, "", "em aberto", "", (n => n ? `<span class="tile-a">${n === 1 ? "1 marca você" : n + " marcam você"}</span>` : "")(S.pendencias.filter(tagsMe).length))}
       ${tile("recipes", "plano", "Receitas conferidas", cnt(act, isRev), `/${act.length}`, "confira antes de alguém comprar", "wide")}
     </div>
 `;
