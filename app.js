@@ -255,7 +255,7 @@
   function findIng(name) { const k = norm(name); return S.ingredients.find(i => norm(i.name) === k); }
 
   function onScroll() {
-    const top = $("#top"), on = ui.tab !== "start" && !top.hidden && window.scrollY > top.offsetHeight - 8;
+    const on = window.scrollY > (ui.tab === "start" ? 240 : 56);
     document.body.classList.toggle("scrolled", on);
   }
   window.addEventListener("scroll", onScroll, { passive: true });
@@ -282,7 +282,7 @@
     view.querySelectorAll("input[placeholder]:not([aria-label])").forEach(i => { if (!i.closest("label")) i.setAttribute("aria-label", i.placeholder); });
     $("#top").innerHTML = ui.tab === "start" ? "" : header();
     const hs = ui.tab === "start" ? null : headStat(shopping());
-    $("#mini").innerHTML = hs ? `<button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button><strong>${TITLE[ui.tab]}</strong>${hs.n ? `<span>${hs.d} de ${hs.n}</span>` : ""}<i style="width:${hs.n ? Math.round(100 * hs.d / hs.n) : 0}%"></i>` : "";
+    $("#mini").innerHTML = ui.tab === "start" ? `<strong>Ano Novo 26/27</strong><button class="link" data-go="cfg">Ajustes</button>` : hs ? `<button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button><strong>${TITLE[ui.tab]}</strong>${hs.n ? `<span>${hs.d} de ${hs.n}</span>` : ""}<i style="width:${hs.n ? Math.round(100 * hs.d / hs.n) : 0}%"></i>` : "";
     onScroll();
     if (ui.tab === "shop" && ui.q) filterShop();
     if (ui.tab === "recipes" && ui.rq) filterRecipes();
@@ -446,7 +446,7 @@
     const L = dayLabel(d, true), entries = S.menu.filter(m => m.day_id === d.id).sort(byPos);
     return `<div class="sheet-bg" data-act="sheet-close"></div>
     <section class="sheet" role="dialog" aria-modal="true" aria-label="Cardápio de ${L.wk} ${L.dd}">
-      <header><h2><b>${L.dd}</b> ${L.wk}, ${L.mon}</h2><button class="btn" data-act="sheet-close">Fechar</button></header>
+      <header><h2><b>${L.dd}</b> ${L.wk}, ${L.mon}</h2><button class="btn" id="sheet-x" data-act="sheet-close">Fechar</button></header>
 <div class="day-body">
           ${entries.map(m => `<small class="cat">${esc((get("recipes", m.recipe_id) || {}).block || "")}</small><div class="entry">
             <select data-act="set" data-t="menu" data-id="${m.id}" data-f="recipe_id" aria-label="Prato do dia">${recipeOptions(m.recipe_id)}</select>
@@ -564,8 +564,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         <div class="daypick">${[...S.days].sort((a, b) => a.date.localeCompare(b.date)).map(d => { const L = dayLabel(d, true), on = S.menu.some(m => m.day_id === d.id && m.recipe_id === r.id);
           return `<button type="button" class="dchip" data-act="toggle-day" data-r="${r.id}" data-d="${d.id}" aria-pressed="${on}" aria-label="${L.wk} ${L.dd} de ${L.mon}"><b>${L.dd}</b><small>${L.wk}</small></button>`; }).join("")}
           <button type="button" class="dchip wide" data-act="weekly" data-id="${r.id}" data-v="${r.weekly ? 0 : 1}" aria-pressed="${!!r.weekly}">Semana toda</button></div>
-        <span class="note">Sem nenhum dia marcado, a receita fica como ideia e não entra nas compras.</span>
-        <button type="button" class="ghost" data-act="back">Ver no cardápio</button></div>`}
+        ${r.weekly || S.menu.some(m => m.recipe_id === r.id) ? `<button type="button" class="ghost seecal" data-act="back">Ver no cardápio</button>` : `<span class="note">Sem nenhum dia marcado, a receita fica como ideia e não entra nas compras.</span>`}</div>`}
       ${hasCol("recipes", "brought") ? `<div class="fld">${chk("recipes", r.id, "brought", r.brought, "Alguém leva pronto (os ingredientes saem das compras)")}
         ${r.brought ? `<div class="pickwrap">${pickBtn(r.id, r.owner)}</div>${pickPanel("recipes", r.id, r.owner)}` : ""}</div>` : ""}
       </section>`}
@@ -605,6 +604,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         <input name="qty" placeholder="Qtd" inputmode="decimal">
         <input name="unit" placeholder="${flat === true ? "un, g, lata…" : "g, xícara…"}" autocapitalize="none" data-sug="units" autocomplete="off">
         <button class="btn">Adicionar</button>
+        <label class="secpick" hidden>Ingrediente novo. Seção do mercado <select name="sector"><option value="">Escolher…</option>${SECTORS.map(x => `<option>${esc(x)}</option>`).join("")}</select></label>
         ${flat === true ? "" : `<p class="hint">Xícara e colher de sopa de farinha, açúcar, manteiga, leite e parecidos são convertidas para g ou ml.</p>`}
       </form>`}
       ${flat === true ? gtools("r-" + r.id, "Definir responsável pelos itens") : ""}
@@ -646,11 +646,11 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const active = ["fWho", "fRev", "fSector", "fStore", "fWhen", "fType"].filter(k => ui[k]).length;
     const paid = paidSum(all);
     return `<div class="shopbar">
-      <input type="search" id="shop-q" placeholder="Buscar item" value="${esc(ui.q)}" aria-label="Buscar item">
+      <div class="srow"><input type="search" id="shop-q" placeholder="Buscar item" value="${esc(ui.q)}" aria-label="Buscar item">
+        <select class="grp" data-act="ui" data-f="group" aria-label="Agrupar por">${Object.entries(GROUPS).map(([v, l]) => `<option value="${esc(v)}" ${ui.group === v ? "selected" : ""}>Por ${esc(l.toLowerCase())}</option>`).join("")}</select></div>
       ${seg3("fStatus", ["Tudo", "Falta", "Comprado"])}
-      <label class="fld grouper">Agrupar por ${sel("group", Object.entries(GROUPS))}</label>
     </div>
-    <div class="fchips" role="group" aria-label="Filtros">
+    <div class="hbox"><div class="fchips row" role="group" aria-label="Filtros">
       ${pill("fWho", "Pessoa", people2())}
       ${pill("fSector", "Seção", vals("sector").map(x => [x, x]))}
       ${pill("fWhen", "Momento", vals("when_buy").map(x => [x, x]))}
@@ -658,7 +658,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${vals("type").length > 1 ? pill("fType", "Comida ou item", vals("type").map(x => [x, x])) : ""}
       ${pill("fRev", "Revisão", [["ok", "Receitas revisadas"], ["todo", "Receita a revisar"]])}
       ${active || ui.fStatus ? `<button class="ghost" data-act="clear-filters">Limpar</button>` : ""}
-    </div>
+    </div>${MORE}</div>
     ${paid || active || ui.fStatus ? `<p class="hint">${paid ? `R$ ${money.format(paid)} pagos até agora (${esc(paidBy(all))}). ` : ""}${active || ui.fStatus ? `Mostrando ${shown.length} de ${all.length} itens.` : ""}</p>` : `<p class="hint">Toque num grupo para abrir a lista.</p>`}
     ${groupList(shown, ui.group, tot, "h2", active || ui.fStatus ? "shopf" : "shop", !!(active || ui.fStatus)) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
     <form class="newrow" data-form="add-extra" data-buy="1"><input name="item" placeholder="Adicionar compra que não é comida" required><button class="btn">Adicionar</button></form>
@@ -725,31 +725,36 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const sug = S.recipes.filter(r => key && (norm(r.name).includes(key) || key.includes(norm(r.name))));
     const others = S.recipes.filter(r => !sug.includes(r)).sort((a, b) => a.name.localeCompare(b.name, "pt"));
     const o = r => `<option value="${r.id}">${esc(r.name)}</option>`;
-    return `<li class="${p.done ? "done" : ""}">
+    return `<li class="${p.done ? "done" : ""}" data-txt="${esc(norm(p.subject + " " + (p.detail || "")))}">
       ${tick("pendencias", p.id, "done", p.done, "Resolvido: " + p.subject)}
       <div>${ui.open.has("ep-" + p.id) ? `<form class="pedit" data-form="edit-pend" data-id="${p.id}"><input name="subject" value="${esc(p.subject)}" required aria-label="Texto da pendência"><textarea name="detail" rows="${Math.min(8, Math.max(2, Math.ceil(String(p.detail || "").length / 34)))}" placeholder="Detalhe (opcional)" aria-label="Detalhe">${esc(p.detail)}</textarea><div><button class="btn">Salvar</button><button type="button" class="ghost" data-act="open" data-key="ep-${p.id}">Cancelar</button></div></form>`
         : `<strong>${esc(p.subject)}</strong>${p.detail ? `<p>${esc(p.detail)}</p>` : ""}`}
         ${noComments ? area("pendencias", p.id, "answer", p.answer, p.kind === "Dúvida" ? "Resposta" : "Comentário") : thread(p)}
-        ${!hasCol("pendencias", "recipe_id") ? "" : inRecipe ? `<button class="ghost" data-act="pend-out" data-id="${p.id}">Tirar da receita</button>`
+        <div class="pacts">${!hasCol("pendencias", "recipe_id") ? "" : inRecipe ? `<button class="ghost" data-act="pend-out" data-id="${p.id}">Tirar da receita</button>`
           : `<button class="ghost" data-act="open" data-key="lk-${p.id}" aria-expanded="${ui.open.has("lk-" + p.id)}">Vincular a receita</button>`}
-        ${ui.open.has("ep-" + p.id) ? "" : `<button class="ghost" data-act="open" data-key="ep-${p.id}">Editar</button>`}
-        <button class="ghost" data-act="del" data-t="pendencias" data-id="${p.id}">Excluir</button>
+        <span class="acts">${ui.open.has("ep-" + p.id) ? "" : `<button class="icon" data-act="open" data-key="ep-${p.id}" aria-label="Editar pendência"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button>`}
+        <button class="icon" data-act="del" data-t="pendencias" data-id="${p.id}" aria-label="Excluir pendência"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></span></div>
         ${!inRecipe && ui.open.has("lk-" + p.id) ? `<div class="linker"><input type="search" class="lk-q" placeholder="Buscar receita" aria-label="Buscar receita">
           <div class="lk-list">${[...sug, ...others].map(r => `<button class="tagbtn" data-act="pend-link" data-id="${p.id}" data-r="${r.id}" data-name="${esc(norm(r.name))}">${esc(r.name)}</button>`).join("")}</div></div>` : ""}</div></li>`;
   }
   function vPend() {
-    const free = S.pendencias.filter(p => !p.recipe_id), linked = S.pendencias.length - free.length;
-    const todo = free.filter(p => !p.done), done = free.filter(p => p.done).sort(byPos);
-    const kinds = [...new Set(todo.map(p => p.kind))];
+    // as dúvidas de receita aparecem aqui também, agrupadas pela receita, para a conversa ficar num lugar só
+    const todo = S.pendencias.filter(p => !p.done), done = S.pendencias.filter(p => p.done).sort(byPos);
+    const free = todo.filter(p => !p.recipe_id || !get("recipes", p.recipe_id)), kinds = [...new Set(free.map(p => p.kind))];
+    const recs = [...new Set(todo.filter(p => !free.includes(p)).map(p => p.recipe_id))].map(id => get("recipes", id)).sort((a, b) => a.name.localeCompare(b.name, "pt"));
+    const row = p => pendRow(p, !!(p.recipe_id && get("recipes", p.recipe_id)));
     return `<form class="newrow" data-form="add-pend">
       <input name="subject" placeholder="Assunto" required><input name="detail" placeholder="Qual é a dúvida ou o lembrete?">
       <button class="btn primary">Adicionar pendência</button></form>
-    <p class="hint">${linked ? `${linked} ${linked === 1 ? "pendência está" : "pendências estão"} dentro das receitas. ` : ""}Se a dúvida é sobre uma receita, mova para ela: passa a aparecer só lá.</p>
+    ${S.pendencias.length > 5 ? `<input type="search" id="pend-q" placeholder="Buscar nas pendências" aria-label="Buscar nas pendências">` : ""}
     ${kinds.map(k => {
-      const list = todo.filter(p => p.kind === k).sort(byPos);
-      return `<h2>${esc(k)} <small>${list.length}</small></h2><ul class="pend">${list.map(p => pendRow(p)).join("")}</ul>`;
-    }).join("") || `<p class="empty">Nenhuma pendência em aberto.</p>`}
-    ${done.length ? `<h2>Resolvidas <small>${done.length}</small></h2><ul class="pend">${done.map(p => pendRow(p)).join("")}</ul>` : ""}`;
+      const list = free.filter(p => p.kind === k).sort(byPos);
+      return `<section class="pgrp"><h2>${esc(kinds.length > 1 ? k : "Gerais")} <small>${list.length}</small></h2><ul class="pend">${list.map(row).join("")}</ul></section>`;
+    }).join("")}
+    ${recs.map(r => { const list = todo.filter(p => p.recipe_id === r.id).sort(byPos);
+      return `<section class="pgrp"><h2><button class="h2link" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}</button> <small>${list.length}</small></h2><ul class="pend">${list.map(row).join("")}</ul></section>`; }).join("")}
+    ${todo.length ? "" : `<p class="empty">Nenhuma pendência em aberto.</p>`}
+    ${done.length ? `<section class="pgrp"><h2>Resolvidas <small>${done.length}</small></h2><ul class="pend">${done.map(row).join("")}</ul></section>` : ""}`;
   }
 
   function vTake() {
@@ -839,7 +844,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     ${client ? `<h2>Sair</h2><p class="hint">Você entrou como ${esc(who)}. O login fica salvo neste aparelho até sair.</p><button class="btn" data-act="logout">Sair deste aparelho</button>` : ""}`;
   }
 
-  const MORE = `<button class="more-btn" data-act="scroll-right" aria-label="Ver os próximos dias"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button><button class="more-btn back" data-act="scroll-left" aria-label="Voltar aos dias anteriores"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>`;
+  const MORE = `<button class="more-btn" data-act="scroll-right" aria-label="Ver mais"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button><button class="more-btn back" data-act="scroll-left" aria-label="Voltar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>`;
   function markScroll() {
     view.querySelectorAll(".hbox").forEach(b => {
       const sc = b.firstElementChild, upd = () => { b.classList.toggle("more", sc.scrollWidth - sc.clientWidth - sc.scrollLeft > 8); b.classList.toggle("less", sc.scrollLeft > 24); };
@@ -860,7 +865,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const todo = new Map();
     S.recipe_items.forEach(it => { if (!nextIds.has(it.ingredient_id)) return; const r = get("recipes", it.recipe_id); if (r && !r.reviewed && recipeCount(r)) todo.set(r.id, (todo.get(r.id) || 0) + 1); });
     const cnt = (l, f) => l.filter(f).length;
-    const tile = (tab, sec, title, big, small, sub, cls = "", alert = "") => `<button class="tile ${cls}" data-go="${tab}" data-sec="${sec}"><span class="tile-t">${title}</span><span class="tile-n">${big}<i>${small}</i></span><span class="tile-s">${sub}</span>${alert ? `<span class="tile-a">${alert}</span>` : ""}</button>`;
+    // quase tudo sem dono ainda: convite neutro; sobrando poucos: alerta com o número
+    const noOwner = (n, total) => !n ? "" : n > total / 2 ? `<span class="tile-a soft">Distribuir responsáveis</span>` : `<span class="tile-a">${n} sem responsável</span>`;
+    const tile = (tab, sec, title, big, small, sub, cls = "", alert = "") => `<button class="tile ${cls}" data-go="${tab}" data-sec="${sec}"><span class="tile-t">${title}</span><span class="tile-n">${big}<i>${small}</i></span><span class="tile-s">${sub}</span>${alert}</button>`;
     const waves = [0, 1, 2, 3, 4, 5, 6].map(k => { const y = 10 + k * 12, a = k % 2 ? 7 : -7; return `<path d="M-20 ${y} C 60 ${y + a}, 140 ${y - a}, 220 ${y} S 380 ${y + a}, 460 ${y} S 620 ${y - a}, 700 ${y} S 860 ${y + a}, 940 ${y}"/>`; }).join("");
     return `<section class="hero">
       <div class="top-row"><span>Ano Novo 26/27</span>${client ? `<span class="acct">${esc(who)}<button class="link" data-go="cfg">Ajustes</button></span>` : `<span>modo local</span>`}</div>
@@ -874,8 +881,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${todo.size ? `<button class="nb-sub chev" data-act="open" data-key="todo" aria-expanded="${ui.open.has("todo")}">Antes, revisar ${todo.size} ${todo.size === 1 ? "receita" : "receitas"}</button>` : `<span class="nb-ok">As receitas dessa leva já foram revisadas.</span>`}</div>
     ${todo.size && ui.open.has("todo") ? `<ul class="plain">${[...todo].map(([id, c]) => `<li><button class="rowlink" data-act="open-recipe" data-id="${id}">${esc(get("recipes", id).name)}<small>${c} ${c === 1 ? "item" : "itens"} nessa leva</small></button></li>`).join("")}</ul>` : ""}` : ""}
     <div class="tiles">
-      ${tile("shop", "compras", "Compras", cnt(buy, isDone), `/${buy.length}`, "itens comprados", "", buyNo ? `${buyNo} sem responsável` : "")}
-      ${tile("take", "levar", "Levar", cnt(take, isDone), `/${take.length}`, "itens separados", "", takeNo ? `${takeNo} sem responsável` : "")}
+      ${tile("shop", "compras", "Compras", cnt(buy, isDone), `/${buy.length}`, "itens comprados", "", noOwner(buyNo, buy.length))}
+      ${tile("take", "levar", "Levar", cnt(take, isDone), `/${take.length}`, "itens separados", "", noOwner(takeNo, take.length))}
       ${tile("mine", "minha", "Minha lista", cnt(mine, isDone), `/${mine.length}`, me ? `itens de ${esc(me)}` : "sem pessoa definida")}
       ${tile("pend", "pend", "Pendências", open, "", open === 1 ? "em aberto" : "em aberto")}
       ${tile("recipes", "plano", "Receitas revisadas", cnt(act, r => r.reviewed), `/${act.length}`, "confira antes de alguém comprar", "wide")}
@@ -936,22 +943,27 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
 
   /* ---------- ações ---------- */
   const num = v => { const n = parseFloat(String(v).replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
-  const GUESS = [["Hortifruti", /tomate|cebola|alho|alface|rucula|coentro|salsa|cebolinha|batata|cenoura|limao|laranja|abacate|pepino|repolho|fruta|banana|morango|pimentao|abobrinha|berinjela|legume|verdura|manjericao|hortela/],
+  const GUESS = [["Congelados", /congelad|sorvete|guioza|rolinho|polpa/], ["Padaria", /^pao|pao de|torrad|bolo/],
+    ["Bebidas", /cerveja|vinho|espumante|vodka|rum|sake|refrigerante|^suco|agua|coca|sprite|gelo|aperol|gin\b|tonica|energetico|cachaca|whisky|tequila|licor/],
+    ["Mercearia", /em po|em conserva|enlatad|\(lata\)|molho|extrato|geleia|suco em|seco|seca|desidratad|oleo|azeite|vinagre|farinha|acucar|\bsal\b|tempero pronto|pasta de|leite de coco|coco ralado|macarrao|massa/],
+    ["Hortifruti", /tomate|cebola|alho|alface|rucula|coentro|salsa|cebolinha|batata|cenoura|limao|laranja|abacate|pepino|repolho|fruta|banana|morango|pimentao|abobrinha|berinjela|legume|verdura|manjericao|hortela|abacaxi|melancia|melao|mamao|maracuja|pessego|ameixa|goiaba|tangerina|mexerica|framboesa|mirtilo|cereja|acerola|lichia|pitaya|brocolis|espinafre|agriao|acelga|chicoria|escarola|abobora|chuchu|quiabo|vagem|ervilha fresca|milho verde|mandioca|aipim|inhame|beterraba|rabanete|gengibre|pimenta dedo|pimenta fresca|cogumelo|shimeji|shitake|champignon fresco|alho-poro|alho poro|salsao|erva-doce|alecrim|tomilho|louro fresco|salvia|endro|rucula|folhas|\b(manga|maca|pera|uva|kiwi|figo|coco|caju|nabo|amora|dill|aipo|couve|broto)s?\b/],
     ["Açougue e peixaria", /carne|frango|linguica|bacon|peixe|salmao|costela|picanha|sobrecoxa|peito|camarao|file/],
     ["Frios e laticínios", /queijo|leite|iogurte|manteiga|requeijao|creme de leite|cream cheese|presunto|salame|ricota|mussarela|ovo/],
-    ["Padaria", /^pao|pao de|torrad|bolo/], ["Bebidas", /cerveja|vinho|espumante|vodka|rum|sake|refrigerante|suco|agua|coca|sprite|gelo|aperol/],
-    ["Congelados", /congelad|sorvete|guioza|rolinho/], ["Casa e descartáveis", /papel|detergente|guardanapo|saco de lixo|copo|descartavel|carvao|esponja/]];
-  const guessSector = name => { const k = norm(name); return (GUESS.find(([, re]) => re.test(k)) || ["Mercearia"])[0]; };
-  function ensureIngredient(name, unit) {
+    ["Casa e descartáveis", /papel|detergente|guardanapo|saco de lixo|copo|descartavel|carvao|esponja/]];
+  const guessRaw = name => { const k = norm(name); return (GUESS.find(([, re]) => re.test(k)) || [""])[0]; };
+  const guessSector = name => guessRaw(name) || "Mercearia";
+  function ensureIngredient(name, unit, sector) {
     const found = findIng(name); if (found) return found;
-    const ing = { id: uid(), name: name.trim(), unit: (unit || "un").trim() || "un", sector: guessSector(name), when_buy: "Antes da viagem", buy_hint: "", bought: false, from_home: false, owner: "", note: "" };
+    const ing = { id: uid(), name: name.trim(), unit: (unit || "un").trim() || "un", sector: sector || guessSector(name), when_buy: "Antes da viagem", buy_hint: "", bought: false, from_home: false, owner: "", note: "" };
     S.ingredients.push(ing); persist("ingredients", ing);
-    toast(`Ingrediente novo: ${ing.name}, em ${ing.sector}. Para mudar a seção, toque em "Mais".`);
+    toast(`Ingrediente novo: ${ing.name}, em ${ing.sector}.`);
     return ing;
   }
 
   view.addEventListener("change", e => {
-    const el = e.target, act = el.dataset.act; if (!act) return;
+    const el = e.target, act = el.dataset.act;
+    if (el.name === "sector" && el.closest(".secpick")) { el.dataset.touched = "1"; el.closest(".secpick").classList.toggle("ask", !el.value); }
+    if (!act) return;
     const force = el.type === "checkbox" || el.tagName === "SELECT";
     if (act === "set") {
       const { t, id, f } = el.dataset;
@@ -997,7 +1009,10 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       const it = get("recipe_items", el.dataset.id), name = el.value.trim();
       if (!it || !name) return render(true);
       const cur = get("ingredients", it.ingredient_id);
-      if (cur && norm(cur.name) === norm(name)) return;
+      if (cur && cur.name === name) return;
+      // só mudou maiúscula ou acento, ou o nome é novo e o ingrediente só existe nesta linha: renomeia o próprio ingrediente
+      const alone = cur && S.recipe_items.filter(i => i.ingredient_id === cur.id).length === 1;
+      if (cur && (norm(cur.name) === norm(name) || (alone && !findIng(name)))) return update("ingredients", cur.id, { name }, true);
       const ing = ensureIngredient(name, cur && cur.unit);
       update("recipe_items", it.id, { ingredient_id: ing.id }, true);
     } else if (act === "menu-add") {
@@ -1010,14 +1025,25 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const el = e.target;
     if (el.id === "shop-q") { ui.q = el.value; filterShop(); }
     if (el.id === "rec-q") { ui.rq = el.value; filterRecipes(); }
+    if (el.id === "pend-q") { const k = norm(el.value); view.querySelectorAll(".pgrp").forEach(g => { let n = 0; g.querySelectorAll(":scope > .pend > li").forEach(li => { li.hidden = !!k && !li.dataset.txt.includes(k); n += !li.hidden; }); g.hidden = !n; }); }
     if (el.classList.contains("lk-q")) { const k = norm(el.value); el.parentNode.querySelectorAll("[data-name]").forEach(b => { b.hidden = !!k && !b.dataset.name.includes(k); }); }
     if (el.dataset.act === "ing-hint") {
       const u = el.form.elements.unit, g = findIng(el.value);
       // sugere a unidade da lista, sem travar: quem escreveu outra unidade fica com a sua
       if (!u.value || u.dataset.auto === u.value) u.value = g ? g.unit : "";
       u.dataset.auto = g ? g.unit : "";
+      // ingrediente novo: mostra a seção com o palpite; sem palpite, pede para escolher
+      const sp = el.form.querySelector(".secpick"), ss = sp && sp.querySelector("select");
+      if (sp) { const isNew = !g && el.value.trim().length > 1; sp.hidden = !isNew; if (isNew && !ss.dataset.touched) ss.value = guessRaw(el.value); sp.classList.toggle("ask", isNew && !ss.value); }
     }
   });
+  function closeSheet() {
+    const id = ui.sheet; if (!id) return;
+    ui.sheet = null; render(true);
+    const b = view.querySelector(`[data-act="sheet-day"][data-id="${id}"]`); if (b) b.focus();   // devolve o foco ao dia de origem
+  }
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && ui.sheet && !sugFor) closeSheet(); });
+
   // Sugestões próprias: o <datalist> do navegador não abre no Android.
   const SUG_UNITS = ["g", "kg", "ml", "L", "un", "xícara", "colher de sopa", "lata", "pacote", "maço", "garrafa", "caixa"];
   const sugBox = document.createElement("div"); sugBox.className = "sugbox"; sugBox.hidden = true; sugBox.setAttribute("role", "listbox"); document.body.appendChild(sugBox);
@@ -1102,8 +1128,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     else if (act === "weekly") { const r = get("recipes", el.dataset.id), on = el.dataset.v === "1"; if (r) { toast(on ? `${r.name} entrou na semana toda.` : `${r.name} virou ideia e saiu das compras.`); update("recipes", r.id, { weekly: on }, true); } }
     else if (act === "review") update("recipes", el.dataset.id, { reviewed: el.dataset.v === "1", reviewed_by: el.dataset.v === "1" ? who : "" }, true);
     else if (act === "ui-set") { ui[el.dataset.f] = el.dataset.v; if (el.dataset.f === "menuView") localStorage.setItem("an-menu-view", el.dataset.v); render(true); }
-    else if (act === "goto-day" || act === "sheet-day") { ui.tab = "menu"; localStorage.setItem("an-tab", "menu"); ui.sheet = el.dataset.id; render(true); }
-    else if (act === "sheet-close") { ui.sheet = null; render(true); }
+    else if (act === "goto-day" || act === "sheet-day") { ui.tab = "menu"; localStorage.setItem("an-tab", "menu"); ui.sheet = el.dataset.id; render(true); const x = document.getElementById("sheet-x"); if (x) x.focus(); }
+    else if (act === "sheet-close") closeSheet();
     else if (act === "clear-mine") { ui.mSector = ui.mStatus = ""; render(true); }
     else if (act === "clear-rec") { ui.rBlock = ui.rIn = ui.rRev = ""; render(true); }
     else if (act === "clear-take") { ui.tWho = ui.tStatus = ""; render(true); }
@@ -1126,7 +1152,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         // mesma comida em outra medida: não dá para somar g com unidade na lista de compras
         if (!S.recipe_items.some(i => i.ingredient_id === old.id)) { update("ingredients", old.id, { unit }); ing = old; }
         else { ing = ensureIngredient(`${old.name} (${unit})`, unit); toast(`${old.name} já está na lista em ${old.unit}. Criei "${ing.name}" para não misturar as medidas.`); }
-      } else ing = ensureIngredient(v("name"), unit);
+      } else ing = ensureIngredient(v("name"), unit, f.querySelector('[name="sector"]') ? v("sector") : "");
       add("recipe_items", { id: uid(), recipe_id: f.dataset.id, ingredient_id: ing.id, qty, suggested: false, veg: "", note: "", pos: nextPos("recipe_items") });
     } else if (kind === "new-recipe") {
       const r = { id: uid(), name: v("name"), block: v("block"), reviewed: false, reviewed_by: "", serves: "", weekly: false, notes: "", prep: "", pos: nextPos("recipes") };

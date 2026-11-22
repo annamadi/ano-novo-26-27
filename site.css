@@ -6,7 +6,7 @@
   --paper: #FFFFFF;
   --mist: #F3F4F2;
   --line: #DCDFDC;
-  --muted: #56636B;
+  --muted: #4A565E;
   --gold: #B8975A;
   --gold-soft: #D8C08C;
   --gold-deep: #7C5E22;
@@ -529,3 +529,28 @@ select.pill.on { background-color: var(--ink); border-color: var(--ink); }
 .sugbox[hidden] { display: none; }
 .sugbox button { display: block; width: 100%; text-align: left; min-height: 44px; padding: 8px 12px; border: 0; background: none; border-radius: 8px; font: inherit; color: var(--ink); cursor: pointer; }
 .sugbox button:hover, .sugbox button:active, .sugbox button[aria-selected="true"] { background: var(--mist); }
+
+/* rodada 2 da avaliação */
+.bar button { font-size: .8rem; }
+.sync:not([hidden]) + .toast { bottom: calc(var(--bar-h) + 66px); }
+.seecal { display: inline-flex; align-items: center; white-space: nowrap; padding: 0; margin-top: 4px; }
+.tile-a.soft { background: var(--mist); color: var(--ink); }
+.mini .link { color: #fff; }
+.shopbar { display: grid; gap: 8px; padding: 4px 0 8px; }
+.srow { display: flex; gap: 8px; }
+.srow input[type=search] { flex: 1 1 auto; min-width: 0; }
+.srow .grp { flex: 0 0 auto; width: auto; max-width: 46%; margin: 0; }
+.fchips.row { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; margin: 2px -16px 8px; padding: 0 16px; scrollbar-width: none; }
+.fchips.row::-webkit-scrollbar { display: none; }
+.fchips.row > * { flex: 0 0 auto; width: auto; }
+.secpick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: .95rem; background: var(--mist); border-radius: 12px; padding: 8px 12px; }
+.secpick[hidden] { display: none; }
+.secpick select { width: auto; flex: 1 1 150px; margin: 0; }
+.secpick.ask { background: var(--warn-bg); color: var(--warn-ink); }
+.pacts { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pacts .acts { display: flex; margin-left: auto; }
+.pacts .ghost { padding: 0; }
+.h2link { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 4px; text-align: left; }
+#pend-q { width: 100%; margin: 4px 0 2px; }
+.pgrp[hidden] { display: none; }
+.pend li[hidden] { display: none; }
