@@ -601,3 +601,24 @@ select.pill.on { background-color: var(--ink); border-color: var(--ink); }
 .it { background: var(--mist); border-radius: 12px; padding: 4px 12px 10px; margin: 4px -12px; border-bottom: 0; }
 .it input, .it select { background: #fff; }
 .addx { margin-top: 12px; }
+
+/* conferência por ingrediente, folha de vegetariano, bloco do ingrediente aberto */
+.items li.ro { display: flex; align-items: center; gap: 4px; }
+.items li.ro .itro { flex: 1 1 auto; min-width: 0; }
+.ckb { flex: none; width: 40px; height: 44px; border: 0; background: none; padding: 0; display: grid; place-items: center; cursor: pointer; }
+.ckb svg { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line); padding: 4px; box-sizing: border-box; fill: none; stroke: transparent; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; background: #fff; }
+.ckb[aria-pressed="true"] svg { background: var(--ok); border-color: var(--ok); stroke: #fff; }
+.tag.new { background: var(--mist); color: var(--ink); }
+.leaf { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--ok); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -2px; margin-left: 6px; }
+.vegline { display: flex; align-items: flex-start; gap: 6px; margin: 2px 0 6px; font-size: .9rem; color: var(--ok); }
+.vegline .leaf { margin: 3px 0 0; }
+.entry .vegline { flex: 1 1 100%; order: 5; margin: 0; }
+.it { display: block; }
+.ithead { display: flex; align-items: center; gap: 4px; }
+.ithead .itro { flex: 1 1 auto; min-width: 0; }
+.itedit { display: grid; grid-template-columns: minmax(0, 1fr) 76px auto 44px; gap: 6px; align-items: center; }
+.ckby { margin: 8px 0 4px; font-size: .9rem; color: var(--muted); }
+.it .more { margin-top: 6px; }
+.link.home { min-width: 44px; padding: 0; justify-content: flex-start; }
+.link.home svg { width: 28px; height: 28px; stroke-width: 1.8; }
+.mini .link.home svg { width: 22px; height: 22px; }
