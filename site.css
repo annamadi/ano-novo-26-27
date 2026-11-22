@@ -834,3 +834,8 @@ h2.hrow { align-items: center; }
 .count span { padding-bottom: .5em; color: rgba(255, 255, 255, .92); }
 .avatar i { width: 34px; height: 34px; box-shadow: 0 0 0 2px rgba(216, 192, 140, .28); }
 .top-row .link.home, .mini .link.home { color: var(--gold-soft); }
+
+/* calendário: rótulo dourado uma vez por tipo, sem barras coloridas */
+.calday .dgrp { border-left: 0; padding: 0; gap: 1px; }
+.calday .dgrp .cat { margin: 0 0 1px; font-size: .74rem; font-weight: 700; color: var(--gold-deep); white-space: nowrap; }
+.cal { grid-template-columns: repeat(var(--n, 8), minmax(128px, 1fr)); min-width: calc(var(--n, 8) * 136px); }
