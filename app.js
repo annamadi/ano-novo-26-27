@@ -533,8 +533,7 @@
       }).join("")}</div></div>${MORE}</div>
       <p class="callegend" aria-hidden="true"><span class="k-veg">Opção vegetariana</span><span class="k-side">Acompanhamento</span><span class="k-sweet">Sobremesa</span></p>
       <p class="hint">Toque num dia para abrir e editar. A faixa verde no topo marca os dias que precisam de opção vegetariana.</p>`;
-    return `<p class="lead">Toque num dia para trocar o prato. A lista de compras se refaz sozinha com o que estiver aqui.</p>
-    <div class="seg" role="group" aria-label="Visualização">
+    return `    <div class="seg" role="group" aria-label="Visualização">
       <button data-act="ui-set" data-f="menuView" data-v="list" aria-pressed="${ui.menuView !== "cal"}">Lista</button>
       <button data-act="ui-set" data-f="menuView" data-v="cal" aria-pressed="${ui.menuView === "cal"}">Calendário</button>
     </div>
@@ -569,20 +568,20 @@
 
   function vRecipes() {
     const cur = ui.rec && get("recipes", ui.rec);
-    if (cur && cur.block !== "Casa") return `<button class="btn back" data-act="${ui.back ? "back" : "rec-close"}">${ui.back ? "Voltar ao cardápio" : "Voltar às receitas"}</button>${vRecipe(cur, "page")}`;
+    if (cur && cur.block !== "Casa") return `<button class="backlink" data-act="${ui.back ? "back" : "rec-close"}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>${ui.back ? "Cardápio" : "Receitas"}</button>${vRecipe(cur, "page")}`;
     ui.rec = null;
     const pass = r => (!ui.rBlock || r.block === ui.rBlock) && (!ui.rIn || (ui.rIn === "in") === !!recipeCount(r)) && (!ui.rRev || (ui.rRev === "ok") === isRev(r));
     const add = ui.open.has("newrec");
-    return `<div class="shopbar">
+    return `<div class="srow rtop">
       <input type="search" id="rec-q" placeholder="Buscar receita" value="${esc(ui.rq || "")}" aria-label="Buscar receita">
+      <button class="btn sm ${add ? "" : "primary"}" data-act="open" data-key="newrec" aria-expanded="${add}">${add ? "Fechar" : "+ Receita"}</button>
     </div>
     <div class="fchips" role="group" aria-label="Filtros">
       ${pill("rBlock", "Tipo", foodBlocks().map(b => [b, b]))}
       ${pill("rIn", "Cardápio", [["in", "No cardápio"], ["out", "Fora do cardápio"]])}
-      ${pill("rRev", "Conferência", [["ok", "Conferidas"], ["todo", "A conferir"]])}
+      ${pill("rRev", "Situação", [["ok", "Conferidas"], ["todo", "A conferir"]])}
       ${ui.rBlock || ui.rIn || ui.rRev ? `<button class="ghost" data-act="clear-rec">Limpar</button>` : ""}
     </div>
-    <button class="btn ${add ? "" : "primary"}" data-act="open" data-key="newrec" aria-expanded="${add}">${add ? "Fechar" : "Nova receita"}</button>
     ${add ? `<div class="paste">
       <form class="newrow" data-form="new-recipe">
         <input name="name" placeholder="Nome da receita nova" required>
@@ -711,8 +710,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     return `<article class="recipe" id="r-${r.id}" data-name="${esc(norm(r.name))}">
       <button class="rhead chev" data-act="rec-open" data-id="${r.id}"><span>
         <span class="rname">${esc(r.name)}</span>
-        <span class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)}, ${items.length} ${items.length === 1 ? "item" : "itens"}</span></span>
-        ${badges}
+        <span class="rmeta ${st.idea ? "idea" : ""}">${esc(st.text)}</span></span>
+        ${qOpen ? `<span class="tag nov">${qOpen} ${qOpen === 1 ? "dúvida" : "dúvidas"}</span>` : ""}
+        ${r.brought ? `<span class="rprog ok" title="Levada pronta">pronta</span>` : CK() ? (n => `<span class="rprog ${items.length && n === items.length ? "ok" : ""}" aria-label="${n} de ${items.length} ingredientes conferidos">${n}/${items.length}</span>`)(items.filter(isChk).length) : (st.idea ? "" : isRev(r) ? `<span class="tag ok">conferida</span>` : `<span class="tag sug">a conferir</span>`)}
       </button></article>`;
   }
 
@@ -743,6 +743,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         ${active ? `<button class="ghost" data-act="clear-filters">Limpar filtros</button>` : ""}</div>
     </section>` : ""}
     ${paid || active || ui.fStatus ? `<p class="hint">${paid ? `R$ ${money.format(paid)} pagos até agora (${esc(paidBy(all))}). ` : ""}${active || ui.fStatus ? `Mostrando ${shown.length} de ${all.length} itens.` : ""}</p>` : ""}
+    ${shown.some(en => en.k === "i" && revMap.has(en.r.id)) ? `<p class="shoplegend" aria-hidden="true"><i class="qdot"></i>quantidade ainda a conferir</p>` : ""}
     ${groupList(shown, ui.group, tot, "h2", active || ui.fStatus ? "shopf" : "shop", !!(active || ui.fStatus)) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
     <button class="btn sm addx" data-act="open" data-key="newbuy" aria-expanded="${ui.open.has("newbuy")}">${ui.open.has("newbuy") ? "Fechar" : "+ Compra que não é comida"}</button>
     ${ui.open.has("newbuy") ? `<form class="newrow" data-form="add-extra" data-buy="1"><input name="item" placeholder="O que comprar" required><button class="btn">Adicionar</button></form>` : ""}
@@ -755,10 +756,10 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     return `<li class="item ${done ? "done" : ""}" data-name="${esc(norm(i.name))}">
       ${tick("ingredients", i.id, "bought", i.bought, (isHome(i) ? "Separado: " : "Comprado: ") + i.name)}
       <button class="imain" data-act="open" data-key="${i.id}" aria-expanded="${open}">
-        <span class="iname2">${esc(i.name)}</span><span class="iqty2">${esc(fmtQty(e.qty, i.unit))}</span>
+        <span class="iname2">${esc(i.name)}</span><span class="iqty2">${pend ? `<i class="qdot" title="Quantidade a conferir"></i><span class="sr">a conferir: </span>` : ""}${esc(fmtQty(e.qty, i.unit))}</span>
         <span class="isub">${stale || hintDup ? "" : esc(i.buy_hint)}</span>
         <span class="chips">${(() => { const t = [
-          pend ? `<span class="tag sug">a conferir</span>` : "",
+
           i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : "",
           i.bought && i.bought_by ? `<span class="tag ok">pago por ${esc(i.bought_by)}</span>` : "",
           g !== "sector" && secOf(i) ? `<span class="tag">${esc(secOf(i))}</span>` : "",

@@ -725,3 +725,27 @@ h2.sec small { font: 600 .82rem var(--body); color: var(--gold-deep); background
 .tagpick { cursor: pointer; font-family: inherit; position: relative; }
 .tagpick::after { content: ""; position: absolute; inset: -10px -6px; }
 .rrow .pickpanel { grid-column: 1 / -1; }
+
+/* passada de beleza: Compras, Receitas e Cardápio */
+#view h2 { font: 500 1.32rem/1.2 var(--display); letter-spacing: -.005em; }
+#view h2 small { font: 600 .8rem var(--body); color: var(--gold-deep); background: var(--mist); border-radius: 99px; padding: 2px 9px; letter-spacing: 0; }
+.grp { border-top: 1px solid var(--line); margin-top: 6px; }
+.grp:first-of-type { border-top: 0; }
+h2.grp-h .grp-n { font: 500 1.22rem/1.2 var(--display); }
+.grp-c { font-size: .86rem; color: var(--gold-deep); font-weight: 600; }
+.qdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--gold); margin-right: 7px; vertical-align: 2px; }
+.shoplegend { display: flex; align-items: center; gap: 6px; margin: 2px 0 6px; font-size: .84rem; color: var(--muted); }
+.shoplegend .qdot { margin: 0; }
+.rtop { margin: 4px 0 8px; }
+.rtop .btn { flex: 0 0 auto; }
+.rprog { flex: none; font: 600 .84rem var(--body); color: var(--muted); background: var(--mist); border-radius: 99px; padding: 3px 10px; white-space: nowrap; }
+.rprog.ok { background: var(--ok-bg); color: var(--ok); }
+.rname { font-weight: 600; }
+.rhead { min-height: 56px; padding: 8px 0; }
+.backlink { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; margin: 10px 0 6px; min-height: 40px; font: 600 .95rem var(--body); color: var(--muted); cursor: pointer; }
+.backlink svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.day-sum strong { font: 500 1.2rem/1.2 var(--display); letter-spacing: -.005em; }
+.day-sum .none { font: 400 1rem var(--body); }
+#view .rtitle h2 { font: 500 clamp(1.9rem, 8vw, 2.4rem)/1.05 var(--display); letter-spacing: -.015em; }
+.rsec > h3 { font: 500 1.28rem/1.2 var(--display); letter-spacing: -.005em; }
+.rsec > h3 small { font: 600 .8rem var(--body); color: var(--gold-deep); background: var(--mist); border-radius: 99px; padding: 2px 9px; }
