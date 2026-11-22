@@ -618,6 +618,13 @@
     if (first.length >= 4 && norm(recipeName).includes(first)) return 0;   // maionese na "Maionese de batata" é o principal
     return (KIND_RE.find(([, re]) => re.test(k)) || [0])[0];
   }
+  function doubtsBlock(r, tag) {
+    if (!hasCol("pendencias", "recipe_id")) return "";
+    const qs = S.pendencias.filter(p => p.recipe_id === r.id).sort((a, b) => (a.done - b.done) || byPos(a, b));
+    return `<${tag}>Dúvidas ${qs.length ? `<small>${qs.filter(p => p.done).length} de ${qs.length} resolvidas</small>` : ""}</${tag}>
+      ${qs.length ? `<ul class="pend">${qs.map(p => pendRow(p, true)).join("")}</ul>` : ""}
+      <form class="newrow one" data-form="add-pend" data-recipe="${r.id}"><input name="subject" placeholder="Escrever uma dúvida (use @ para marcar alguém)" data-sug="mention" autocomplete="off" required aria-label="Nova dúvida"><button class="btn">Adicionar</button></form>`;
+  }
   function vRecipe(r, flat) {
     const detBlock = `<div class="rdetbox"><div class="grid2">
         <label class="fld">Nome${inp("recipes", r.id, "name", r.name)}</label>
@@ -683,7 +690,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         </li>`;
       }).join("") || `<li class="empty">Sem ingredientes ainda.</li>`}</ul>
       <div class="itools"><button class="btn sm" data-act="open" data-key="add-${r.id}" aria-expanded="${ui.open.has("add-" + r.id)}">${ui.open.has("add-" + r.id) ? "Fechar" : flat === true ? "+ Item" : "+ Ingrediente"}</button>
-        <button class="ghost" data-act="copy-list" data-key="r-${r.id}">Copiar lista</button><button class="ghost" data-act="open" data-key="bulk-r-${r.id}">Responsável</button></div>${bulkPanel("r-" + r.id)}
+        ${flat === true ? "" : `<button class="ghost" data-act="copy-list" data-key="r-${r.id}">Copiar lista</button><button class="ghost" data-act="open" data-key="bulk-r-${r.id}">Responsável</button>`}</div>${flat === true ? "" : bulkPanel("r-" + r.id)}
       ${!ui.open.has("add-" + r.id) ? "" : `<form class="additem" data-form="add-item" data-id="${r.id}">
         <input name="name" placeholder="${flat === true ? "Item" : "Ingrediente"}" data-sug="ings" autocomplete="off" required data-act="ing-hint">
         <input name="qty" placeholder="Qtd" inputmode="decimal">
@@ -695,9 +702,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       </form>`}
       </section>
       ${flat === true ? "" : `<section class="rsec"><h3><label for="prep-${r.id}">Modo de preparo e notas</label></h3><textarea id="prep-${r.id}" data-act="set" data-t="recipes" data-id="${r.id}" data-f="prep" rows="${Math.min(12, Math.max(3, (r.prep || "").split("\n").length + 1))}" placeholder="Passos, dicas, quem faz">${esc(r.prep)}</textarea>${linkList(r.prep)}</section>`}
-      <section class="rsec">      ${!hasCol("pendencias", "recipe_id") ? "" : `<h3>Dúvidas ${qs.length ? `<small>${qs.filter(p => p.done).length} de ${qs.length} resolvidas</small>` : ""}</h3>
-      ${qs.length ? `<ul class="pend">${qs.map(p => pendRow(p, true)).join("")}</ul>` : ""}
-      <form class="newrow one" data-form="add-pend" data-recipe="${r.id}"><input name="subject" placeholder="Escrever uma dúvida (use @ para marcar alguém)" data-sug="mention" autocomplete="off" required aria-label="Nova dúvida sobre esta receita"><button class="btn">Adicionar</button></form>`}</section>
+      ${flat === true ? "" : `<section class="rsec">${doubtsBlock(r, "h3")}</section>`}
       ${CK() ? "" : `<div class="review ${r.reviewed ? "ok" : ""}">${r.reviewed
         ? `<span>Revisada${r.reviewed_by ? " por " + esc(r.reviewed_by) : ""}. Ingredientes e quantidades confirmados.</span><button class="ghost" data-act="review" data-id="${r.id}" data-v="0">Desfazer</button>`
         : qOpen ? `<span>Resolva ${qOpen === 1 ? "a dúvida acima" : `as ${qOpen} dúvidas acima`} antes de marcar como revisada.</span>`
@@ -891,16 +896,19 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
 
   function vHome() {
     const lists = S.recipes.filter(r => r.block === "Casa").sort(byPos);
-    const plain = S.extras.filter(e => !e.activity_id).sort((a, b) => (a.done - b.done) || String(a.owner || "~").localeCompare(String(b.owner || "~"), "pt") || a.item.localeCompare(b.item, "pt"));
+    const plain = S.extras.filter(e => !e.activity_id).sort((a, b) => (a.done - b.done) || (!a.owner - !b.owner) || String(a.owner || "").localeCompare(String(b.owner || ""), "pt") || a.item.localeCompare(b.item, "pt"));
     const nSup = S.recipe_items.filter(i => lists.some(r => r.id === i.recipe_id)).length, addX = ui.open.has("newgen");
-    return `<h2>Suprimentos <small>${nSup}</small></h2>
+    const body = lists.map(r => vRecipe(r, true)).join(""), L0 = lists[0];
+    return `<h2 class="hrow">Suprimentos <small>${nSup}</small>${L0 ? `<span class="htools"><button class="ghost" data-act="copy-list" data-key="r-${L0.id}">Copiar</button><button class="ghost" data-act="open" data-key="bulk-r-${L0.id}" aria-expanded="${ui.open.has("bulk-r-" + L0.id)}">Responsável</button></span>` : ""}</h2>
+    ${L0 ? bulkPanel("r-" + L0.id) : ""}
     <p class="hint">Limpeza e descartáveis, com quantidade. Entram em Compras, ou em Levar se alguém trouxer.</p>
-    ${lists.map(r => vRecipe(r, true)).join("") || `<p class="empty">Nenhuma lista de suprimentos.</p>`}
+    ${body || `<p class="empty">Nenhuma lista de suprimentos.</p>`}
     <h2>Uso geral <small>${plain.filter(e => e.done).length}/${plain.length}</small></h2>
     <p class="hint">Toalha, travesseiro, repelente. Toque no item para definir quem leva ou se precisa comprar.</p>
     <ul class="xlist">${plain.map(e => xRow(e)).join("") || `<li class="empty">Nada na lista ainda.</li>`}</ul>
     <div class="itools"><button class="btn sm" data-act="open" data-key="newgen" aria-expanded="${addX}">${addX ? "Fechar" : "+ Item"}</button></div>
-    ${addX ? `<form class="newrow one" data-form="add-extra"><input name="item" placeholder="Item de uso geral" required><button class="btn">Adicionar</button></form>` : ""}`;
+    ${addX ? `<form class="newrow one" data-form="add-extra"><input name="item" placeholder="Item de uso geral" required><button class="btn">Adicionar</button></form>` : ""}
+    ${L0 ? `<section class="hdoubts">${doubtsBlock(L0, "h2")}<p class="hint">Perguntas sobre a casa: o que ela já tem, o que falta levar.</p></section>` : ""}`;
   }
 
   function vFun() {
@@ -908,7 +916,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     return `<div class="itools"><button class="btn sm ${addA ? "" : "primary"}" data-act="open" data-key="newact" aria-expanded="${addA}">${addA ? "Fechar" : "+ Atividade"}</button></div>
     ${addA ? `<form class="newrow one" data-form="new-activity"><input name="name" placeholder="Nome da atividade" required><button class="btn">Criar</button></form>` : ""}
     ${[...S.activities].sort(byPos).map(a => {
-      const open = ui.open.has(a.id), items = S.extras.filter(e => e.activity_id === a.id).sort((x, y) => (x.done - y.done) || String(x.owner || "~").localeCompare(String(y.owner || "~"), "pt") || x.item.localeCompare(y.item, "pt"));
+      const open = ui.open.has(a.id), items = S.extras.filter(e => e.activity_id === a.id).sort((x, y) => (x.done - y.done) || (!x.owner - !y.owner) || String(x.owner || "").localeCompare(String(y.owner || ""), "pt") || x.item.localeCompare(y.item, "pt"));
       const nd = items.filter(e => e.done).length, ed = ui.open.has("ed-" + a.id), addI = ui.open.has("ai-" + a.id);
       return `<article class="recipe act ${open ? "open" : ""}">
         <button class="rhead chev" data-act="open" data-key="${a.id}" aria-expanded="${open}"><span><span class="rname">${esc(a.name)}</span>${a.notes && !open ? `<span class="rmeta clip">${esc(a.notes)}</span>` : ""}</span>

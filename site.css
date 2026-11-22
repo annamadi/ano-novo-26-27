@@ -778,3 +778,10 @@ h2.grp-h .grp-n { font: 500 1.22rem/1.2 var(--display); }
 .rbody > h3 small { font: 600 .8rem var(--body); color: var(--gold-deep); background: var(--mist); border-radius: 99px; padding: 2px 9px; }
 .itools .icon { margin-left: auto; }
 .recipe.flat .rsec + .rsec { margin-top: 20px; }
+
+/* Casa: ferramentas no título, dúvidas no fim */
+h2.hrow { align-items: center; }
+.htools { margin-left: auto; display: inline-flex; gap: 14px; }
+.htools .ghost { padding: 0; min-height: 40px; font: 600 .88rem var(--body); color: var(--muted); text-decoration-color: var(--line); letter-spacing: 0; }
+.hdoubts { margin-top: 12px; }
+.hdoubts .pend { margin-top: 6px; }
