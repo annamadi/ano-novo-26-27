@@ -503,3 +503,24 @@ select.pill.on { background-color: var(--ink); border-color: var(--ink); }
 .tile-n { margin-top: 8px; line-height: .9; }
 .tile-s { margin-top: 2px; }
 .tile.wide { min-height: 0; }
+
+/* receita: ferramentas dos ingredientes, pendência editável, setas discretas */
+.itools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 10px; }
+.itools .ghost { padding: 0; min-height: 44px; }
+.itools .btn { margin-right: auto; }
+.btn.sm { min-height: 40px; padding: 6px 14px; font-size: .95rem; }
+.rsec > .hint { margin: 0 0 4px; }
+.rsec > h3 label { font: inherit; color: inherit; }
+.rsec > textarea { width: 100%; margin-top: 4px; }
+.newrow.one { flex-wrap: nowrap; }
+.newrow.one input { flex: 1 1 auto; min-width: 0; }
+.recipe.page .review { margin-top: 22px; }
+.pedit { display: grid; gap: 6px; padding-top: 4px; }
+.pedit > div { display: flex; gap: 12px; align-items: center; }
+.more-btn { right: -6px; width: 28px; height: 44px; border-radius: 0; background: none; color: var(--ink); box-shadow: none; }
+.more-btn svg { width: 18px; height: 18px; background: rgba(255, 255, 255, .92); border-radius: 50%; padding: 4px; box-sizing: content-box; box-shadow: 0 1px 4px rgba(22, 32, 42, .18); }
+.more-btn.back { right: auto; left: -6px; }
+.hbox.more .more-btn.back { display: none; }
+.hbox.less .more-btn.back { display: grid; }
+.hbox.more::after { width: 36px; }
+.hbox.less::before { content: ""; position: absolute; top: 0; bottom: 0; left: -16px; width: 36px; background: linear-gradient(to left, rgba(255, 255, 255, 0), #fff 80%); pointer-events: none; z-index: 1; }

@@ -567,6 +567,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         ${r.brought ? `<div class="pickwrap">${pickBtn(r.id, r.owner)}</div>${pickPanel("recipes", r.id, r.owner)}` : ""}</div>` : ""}
       </section>`}
       <section class="rsec"><h3>${flat === true ? "Itens" : "Ingredientes"} <small>${items.length}</small></h3>
+      ${flat === true || !items.length ? "" : `<p class="hint">Toque num ingrediente para editar.</p>`}
       <ul class="items">${items.map(it => {
         const g = get("ingredients", it.ingredient_id) || { name: "?", unit: "" };
         const more = ui.open.has(it.id), cp = cups(g, it.qty);
@@ -582,6 +583,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           <button class="x" data-act="del" data-t="recipe_items" data-id="${it.id}" aria-label="Tirar ${esc(g.name)}">×</button>
           <div class="tags">${it.suggested && !r.reviewed ? `<span class="tag sug">sugestão, confirmar</span>` : ""}${it.veg === "nao" ? `<span class="tag nov">não é vegetariano</span>` : ""}${it.veg === "conferir" ? `<span class="tag sug">conferir rótulo (vegetariano)</span>` : ""}${it.note && !more ? `<span class="note">${esc(it.note)}</span>` : ""}</div>
           ${more ? `<div class="more">
+            ${flat === true ? "" : `<p class="hint">Trocar o nome troca o ingrediente só nesta receita. Para renomear em todas, use a aba Compras.</p>`}
             ${dens(g) ? `<label class="fld">Em xícaras${cp ? ` (hoje: ${cp})` : ""}<input data-act="cups" data-id="${it.id}" inputmode="decimal" placeholder="ex.: 1,5"></label>` : ""}
             <label class="fld">Observação${inp("recipe_items", it.id, "note", it.note)}</label>
             ${g.id ? `<label class="fld">Seção do mercado${inp("ingredients", g.id, "sector", secOf(g), 'list="dl-sectors"')}</label>
@@ -593,24 +595,25 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           </div>` : ""}
         </li>`;
       }).join("") || `<li class="empty">Sem ingredientes ainda.</li>`}</ul>
-      <form class="additem" data-form="add-item" data-id="${r.id}">
+      ${flat === true ? "" : `<div class="itools"><button class="btn sm" data-act="open" data-key="add-${r.id}" aria-expanded="${ui.open.has("add-" + r.id)}">${ui.open.has("add-" + r.id) ? "Fechar" : "+ Ingrediente"}</button>
+        <button class="ghost" data-act="copy-list" data-key="r-${r.id}">Copiar lista</button><button class="ghost" data-act="open" data-key="bulk-r-${r.id}">Responsável</button></div>${bulkPanel("r-" + r.id)}`}
+      ${flat !== true && !ui.open.has("add-" + r.id) ? "" : `<form class="additem" data-form="add-item" data-id="${r.id}">
         <input name="name" placeholder="${flat ? "Item" : "Ingrediente"}" list="dl-ings" required data-act="ing-hint">
         <input name="qty" placeholder="Qtd" inputmode="decimal">
         <input name="unit" placeholder="un, g, lata…">
         <button class="btn">Adicionar</button>
-      </form>
-      ${gtools("r-" + r.id, "Definir responsável pelos ingredientes")}
-      ${flat === true ? "" : `<p class="hint">Toque num ingrediente para editar. Trocar o nome troca o ingrediente só nesta receita. Para renomear em todas, use a aba Compras.</p>`}
+      </form>`}
+      ${flat === true ? gtools("r-" + r.id, "Definir responsável pelos itens") : ""}
       </section>
-      ${flat === true ? "" : `<section class="rsec"><label class="fld">Modo de preparo e notas<textarea data-act="set" data-t="recipes" data-id="${r.id}" data-f="prep" rows="${Math.min(12, Math.max(3, (r.prep || "").split("\n").length + 1))}" placeholder="Passos, dicas, quem faz">${esc(r.prep)}</textarea></label></section>`}
-      <section class="rsec">      ${!hasCol("pendencias", "recipe_id") ? "" : `<h3>Dúvidas desta receita <small>${qs.filter(p => p.done).length}/${qs.length}</small></h3>
+      ${flat === true ? "" : `<section class="rsec"><h3><label for="prep-${r.id}">Modo de preparo e notas</label></h3><textarea id="prep-${r.id}" data-act="set" data-t="recipes" data-id="${r.id}" data-f="prep" rows="${Math.min(12, Math.max(3, (r.prep || "").split("\n").length + 1))}" placeholder="Passos, dicas, quem faz">${esc(r.prep)}</textarea></section>`}
+      <section class="rsec">      ${!hasCol("pendencias", "recipe_id") ? "" : `<h3>Dúvidas ${qs.length ? `<small>${qs.filter(p => p.done).length} de ${qs.length} resolvidas</small>` : ""}</h3>
       ${qs.length ? `<ul class="pend">${qs.map(p => pendRow(p, true)).join("")}</ul>` : ""}
-      <form class="newrow" data-form="add-pend" data-recipe="${r.id}"><input name="subject" placeholder="Nova dúvida sobre esta receita" required><button class="btn">Adicionar dúvida</button></form>`}</section>
+      <form class="newrow one" data-form="add-pend" data-recipe="${r.id}"><input name="subject" placeholder="Escrever uma dúvida" required aria-label="Nova dúvida sobre esta receita"><button class="btn">Adicionar</button></form>`}</section>
       <div class="review ${r.reviewed ? "ok" : ""}">${r.reviewed
         ? `<span>Revisada${r.reviewed_by ? " por " + esc(r.reviewed_by) : ""}. Ingredientes e quantidades confirmados.</span><button class="ghost" data-act="review" data-id="${r.id}" data-v="0">Desfazer</button>`
         : qOpen ? `<span>Resolva ${qOpen === 1 ? "a dúvida acima" : `as ${qOpen} dúvidas acima`} antes de marcar como revisada.</span>`
         : `<span>Leu a lista inteira?</span><button class="btn primary" data-act="review" data-id="${r.id}" data-v="1">Marcar como revisada</button>`}</div>
-      ${flat === true ? "" : `<button class="ghost chev rdet" data-act="open" data-key="det-${r.id}" aria-expanded="${ui.open.has("det-" + r.id)}">Nome, tipo e exclusão</button>
+      ${flat === true ? "" : `<button class="ghost chev rdet" data-act="open" data-key="det-${r.id}" aria-expanded="${ui.open.has("det-" + r.id)}">Detalhes da receita</button>
       ${ui.open.has("det-" + r.id) ? `<div class="grid2">
         <label class="fld">Nome${inp("recipes", r.id, "name", r.name)}</label>
         <label class="fld">Tipo<select data-act="set" data-t="recipes" data-id="${r.id}" data-f="block">${[...new Set(BLOCKS.concat(r.block))].map(b => `<option ${b === r.block ? "selected" : ""}>${esc(b)}</option>`).join("")}</select></label>
@@ -720,10 +723,12 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const o = r => `<option value="${r.id}">${esc(r.name)}</option>`;
     return `<li class="${p.done ? "done" : ""}">
       ${tick("pendencias", p.id, "done", p.done, "Resolvido: " + p.subject)}
-      <div><strong>${esc(p.subject)}</strong>${p.detail ? `<p>${esc(p.detail)}</p>` : ""}
+      <div>${ui.open.has("ep-" + p.id) ? `<form class="pedit" data-form="edit-pend" data-id="${p.id}"><input name="subject" value="${esc(p.subject)}" required aria-label="Texto da pendência"><textarea name="detail" rows="${Math.min(8, Math.max(2, Math.ceil(String(p.detail || "").length / 34)))}" placeholder="Detalhe (opcional)" aria-label="Detalhe">${esc(p.detail)}</textarea><div><button class="btn">Salvar</button><button type="button" class="ghost" data-act="open" data-key="ep-${p.id}">Cancelar</button></div></form>`
+        : `<strong>${esc(p.subject)}</strong>${p.detail ? `<p>${esc(p.detail)}</p>` : ""}`}
         ${noComments ? area("pendencias", p.id, "answer", p.answer, p.kind === "Dúvida" ? "Resposta" : "Comentário") : thread(p)}
         ${!hasCol("pendencias", "recipe_id") ? "" : inRecipe ? `<button class="ghost" data-act="pend-out" data-id="${p.id}">Tirar da receita</button>`
           : `<button class="ghost" data-act="open" data-key="lk-${p.id}" aria-expanded="${ui.open.has("lk-" + p.id)}">Vincular a receita</button>`}
+        ${ui.open.has("ep-" + p.id) ? "" : `<button class="ghost" data-act="open" data-key="ep-${p.id}">Editar</button>`}
         <button class="ghost" data-act="del" data-t="pendencias" data-id="${p.id}">Excluir</button>
         ${!inRecipe && ui.open.has("lk-" + p.id) ? `<div class="linker"><input type="search" class="lk-q" placeholder="Buscar receita" aria-label="Buscar receita">
           <div class="lk-list">${[...sug, ...others].map(r => `<button class="tagbtn" data-act="pend-link" data-id="${p.id}" data-r="${r.id}" data-name="${esc(norm(r.name))}">${esc(r.name)}</button>`).join("")}</div></div>` : ""}</div></li>`;
@@ -830,10 +835,10 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     ${client ? `<h2>Sair</h2><p class="hint">Você entrou como ${esc(who)}. O login fica salvo neste aparelho até sair.</p><button class="btn" data-act="logout">Sair deste aparelho</button>` : ""}`;
   }
 
-  const MORE = `<button class="more-btn" data-act="scroll-right" aria-label="Ver os próximos dias"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>`;
+  const MORE = `<button class="more-btn" data-act="scroll-right" aria-label="Ver os próximos dias"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button><button class="more-btn back" data-act="scroll-left" aria-label="Voltar aos dias anteriores"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>`;
   function markScroll() {
     view.querySelectorAll(".hbox").forEach(b => {
-      const sc = b.firstElementChild, upd = () => b.classList.toggle("more", sc.scrollWidth - sc.clientWidth - sc.scrollLeft > 8);
+      const sc = b.firstElementChild, upd = () => { b.classList.toggle("more", sc.scrollWidth - sc.clientWidth - sc.scrollLeft > 8); b.classList.toggle("less", sc.scrollLeft > 24); };
       upd(); sc.addEventListener("scroll", upd, { passive: true });
     });
   }
@@ -1015,7 +1020,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "back") { ui.back = null; go("menu"); }
     else if (act === "open-recipe") { ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.rec = el.dataset.id; render(true); window.scrollTo(0, 0); }
-    else if (act === "scroll-right") { const sc = el.parentNode.firstElementChild; sc.scrollBy({ left: sc.clientWidth * 0.8, behavior: "smooth" }); }
+    else if (act === "scroll-right" || act === "scroll-left") { const sc = el.parentNode.firstElementChild; sc.scrollBy({ left: sc.clientWidth * 0.8 * (act === "scroll-left" ? -1 : 1), behavior: "smooth" }); }
     else if (act === "rec-open") { ui.rec = el.dataset.id; ui.back = null; render(true); window.scrollTo(0, 0); }
     else if (act === "rec-close") { ui.rec = null; render(true); }
     else if (act === "go-orphans") { if (el.dataset.v === "take") { ui.tWho = "-"; go("take"); } else { ui.fWho = "-"; go("shop"); } }
@@ -1078,6 +1083,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     } else if (kind === "new-activity") {
       const a = { id: uid(), name: v("name"), notes: "", pos: nextPos("activities") };
       ui.open.add(a.id); add("activities", a);
+    } else if (kind === "edit-pend") {
+      ui.open.delete("ep-" + f.dataset.id); update("pendencias", f.dataset.id, { subject: v("subject"), detail: v("detail") }, true);
     } else if (kind === "edit-comment") {
       ui.open.delete("ec-" + f.dataset.id); update("comments", f.dataset.id, { body: v("body") }, true);
     } else if (kind === "add-comment") {
