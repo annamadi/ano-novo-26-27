@@ -618,3 +618,7 @@ body.scrolled .mini { transform: none; visibility: visible; }
 .lchip span { display: grid; min-width: 0; line-height: 1.2; }
 .lchip b { font-weight: 700; font-size: .95rem; }
 .lchip small { font-size: .84rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* unidade editável no ingrediente aberto da receita */
+.itedit { grid-template-columns: minmax(0, 1fr) 64px 84px 44px; }
+.itedit .iunit { min-width: 0; padding-left: 8px; padding-right: 6px; }

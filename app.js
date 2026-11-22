@@ -631,7 +631,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           <div class="itedit">
             <input class="iname" data-act="repoint" data-id="${it.id}" value="${esc(g.name)}" data-sug="ings" autocomplete="off" aria-label="Ingrediente">
             <input class="iqty" data-act="set" data-t="recipe_items" data-id="${it.id}" data-f="qty" data-num="1" value="${esc(nf.format(it.qty || 0).replace(/\./g, ""))}" inputmode="decimal" aria-label="Quantidade">
-            <span class="unit">${esc(g.unit)}</span>
+            ${g.id ? `<input class="iunit" data-act="set" data-t="ingredients" data-id="${g.id}" data-f="unit" value="${esc(g.unit)}" data-sug="units" autocomplete="off" autocapitalize="none" aria-label="Unidade de ${esc(g.name)}">` : `<span class="unit">${esc(g.unit)}</span>`}
             <button class="x" data-act="del" data-t="recipe_items" data-id="${it.id}" aria-label="Tirar ${esc(g.name)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button>
           </div>
           ${ck ? `<p class="ckby">${(pp => !by.length ? (it.suggested ? "Sugestão da IA, ninguém conferiu ainda." : "Novo, ninguém conferiu ainda.") : pp.length ? `Conferido por ${esc(pp.join(", "))}.` : "Veio do caderno, conta como conferido.")(by.filter(n => norm(n) !== "caderno"))}
@@ -1069,7 +1069,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   const num = v => { const n = parseFloat(String(v).replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
   const GUESS = [["Congelados", /congelad|sorvete|guioza|rolinho|polpa/], ["Padaria", /^pao|pao de|torrad|bolo/],
     ["Bebidas", /cerveja|vinho|espumante|vodka|rum|sake|refrigerante|^suco|agua|coca|sprite|gelo|aperol|gin\b|tonica|energetico|cachaca|whisky|tequila|licor/],
-    ["Mercearia", /em po|em conserva|enlatad|\(lata\)|molho|extrato|geleia|suco em|seco|seca|desidratad|oleo|azeite|vinagre|farinha|acucar|\bsal\b|tempero pronto|pasta de|leite de coco|coco ralado|macarrao|massa/],
+    ["Mercearia", /em po|em conserva|enlatad|\(lata\)|molho|extrato|geleia|suco em|seco|seca|desidratad|oleo|azeite|vinagre|farinha|acucar|\bsal\b|tempero pronto|pasta de|leite de coco|coco ralado|macarrao|massa|crispy|frita|chips/],
     ["Hortifruti", /tomate|cebola|alho|alface|rucula|coentro|salsa|cebolinha|batata|cenoura|limao|laranja|abacate|pepino|repolho|fruta|banana|morango|pimentao|abobrinha|berinjela|legume|verdura|manjericao|hortela|abacaxi|melancia|melao|mamao|maracuja|pessego|ameixa|goiaba|tangerina|mexerica|framboesa|mirtilo|cereja|acerola|lichia|pitaya|brocolis|espinafre|agriao|acelga|chicoria|escarola|abobora|chuchu|quiabo|vagem|ervilha fresca|milho verde|mandioca|aipim|inhame|beterraba|rabanete|gengibre|pimenta dedo|pimenta fresca|cogumelo|shimeji|shitake|champignon fresco|alho-poro|alho poro|salsao|erva-doce|alecrim|tomilho|louro fresco|salvia|endro|rucula|folhas|\b(manga|maca|pera|uva|kiwi|figo|coco|caju|nabo|amora|dill|aipo|couve|broto)s?\b/],
     ["Açougue e peixaria", /carne|frango|linguica|bacon|peixe|salmao|costela|picanha|sobrecoxa|peito|camarao|file/],
     ["Frios e laticínios", /queijo|leite|iogurte|manteiga|requeijao|creme de leite|cream cheese|presunto|salame|ricota|mussarela|ovo/],
@@ -1120,6 +1120,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       if (t === "ingredients" && f === "bought" && hasCol(t, "bought_by")) patch.bought_by = v ? (cur.bought_by || who) : "";
       if (t === "extras" && f === "done" && cur.buy && hasCol(t, "bought_by")) patch.bought_by = v ? (cur.bought_by || who) : "";
       if (t === "ingredients" && f === "buy_hint" && hasCol(t, "hint_qty")) patch.hint_qty = (shopping().get(id) || {}).qty ?? null;
+      if (t === "ingredients" && f === "unit") { patch.unit = String(v).trim() || "un"; const n = new Set(S.recipe_items.filter(i => i.ingredient_id === id).map(i => i.recipe_id)).size; if (n > 1) toast(`A unidade mudou neste ingrediente em todas as ${n} receitas que usam ele.`); }
       if (t === "ingredients" && f === "bf" && !v && (get(t, id) || {}).when_buy === BF) patch.when_buy = "Antes da viagem";
       if (ui.tab !== "fun" && ((t === "extras" && f === "buy") || (t === "ingredients" && f === "from_home"))) toast((t === "extras") === !!v ? "Foi para a lista de compras." : "Foi para a lista de levar.");
       update(t, id, patch, force);
