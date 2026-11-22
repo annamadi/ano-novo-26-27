@@ -585,3 +585,19 @@ select.pill.on { background-color: var(--ink); border-color: var(--ink); }
 .pfilter .seg { margin: 0; padding: 2px; }
 .pfilter .seg button { min-height: 36px; padding: 0 10px; font-size: .92rem; }
 .pfilter .pill { flex: 1 1 140px; width: auto; }
+
+/* bolinha de login, ingrediente que abre e fecha pelo nome */
+.top-row { min-height: 54px; align-items: center; }
+.acctbox { position: relative; display: inline-flex; }
+.avatar { background: none; border: 0; padding: 4px 0 4px 8px; display: grid; justify-items: center; gap: 2px; cursor: pointer; color: rgba(255, 255, 255, .82); font: 600 .72rem var(--body); min-width: 48px; }
+.avatar i { font-style: normal; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--gold-soft); color: var(--ink); font: 600 .9rem var(--body); letter-spacing: .02em; }
+.avatar[aria-expanded="true"] i { outline: 2px solid #fff; outline-offset: 2px; }
+.amenu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 12; background: #fff; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .28); padding: 4px; display: grid; min-width: 150px; }
+.amenu button { background: none; border: 0; text-align: left; min-height: 44px; padding: 0 14px; border-radius: 8px; font: 600 1rem var(--body); color: var(--ink); cursor: pointer; }
+.amenu button:hover, .amenu button:active { background: var(--mist); }
+.hero .top-row { border-bottom: 0; }
+.it .itro { grid-column: 1 / -1; }
+.it .itro .itn { font-weight: 700; }
+.it { background: var(--mist); border-radius: 12px; padding: 4px 12px 10px; margin: 4px -12px; border-bottom: 0; }
+.it input, .it select { background: #fff; }
+.addx { margin-top: 12px; }
