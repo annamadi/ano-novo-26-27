@@ -691,7 +691,6 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
 
   function vShop() {
     const tot = shopping(), all = buyEntries(tot);
-    const unused = S.ingredients.filter(i => !tot.has(i.id)).sort((a, b) => a.name.localeCompare(b.name, "pt"));
     const vals = g => [...new Set(all.map(en => keyOf(en, g)))].sort((x, y) => g === "when_buy" ? ((WHEN.indexOf(x) + 99) % 99) - ((WHEN.indexOf(y) + 99) % 99) : (x === NONE[g]) - (y === NONE[g]) || x.localeCompare(y, "pt"));
     const FK = { fSector: "sector", fStore: "store", fWhen: "when_buy", fType: "type" };
     for (const k in FK) if (ui[k] && !vals(FK[k]).includes(ui[k])) ui[k] = "";
@@ -720,10 +719,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     ${groupList(shown, ui.group, tot, "h2", active || ui.fStatus ? "shopf" : "shop", !!(active || ui.fStatus)) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
     <button class="btn sm addx" data-act="open" data-key="newbuy" aria-expanded="${ui.open.has("newbuy")}">${ui.open.has("newbuy") ? "Fechar" : "+ Compra que não é comida"}</button>
     ${ui.open.has("newbuy") ? `<form class="newrow" data-form="add-extra" data-buy="1"><input name="item" placeholder="O que comprar" required><button class="btn">Adicionar</button></form>` : ""}
-    <p class="hint">O que vem de casa fica na aba Levar. Itens de Levar e Entretenimento marcados com "Precisa comprar" aparecem aqui.</p>
-    ${unused.length ? `<details class="unused"><summary>Fora do cardápio (${unused.length})</summary>
-      <p class="hint">Ingredientes que nenhuma receita ativa usa. As marcações ficam guardadas caso voltem.</p>
-      <ul class="plain">${unused.map(i => `<li><span>${esc(i.name)}<small class="note from">${(l => l.length ? "de: " + l.map(esc).join(", ") : "sem receita")([...new Set(S.recipe_items.filter(x => x.ingredient_id === i.id).map(x => (get("recipes", x.recipe_id) || {}).name).filter(Boolean))])}</small></span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}">Excluir</button></li>`).join("")}</ul></details>` : ""}`;
+    <p class="hint">O que vem de casa fica na aba Levar. Itens de Levar e Entretenimento marcados com "Precisa comprar" aparecem aqui.</p>`;
   }
   function vItem(i, e, g) {
     const open = ui.open.has(i.id), done = i.bought, pend = revMap.get(i.id);
@@ -946,6 +942,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <p>${BK_ORDER.map(t => `${(ui.bk.data[t] || []).length} ${BK_LABEL[t]}`).join(", ")}.</p>
       <p class="hint">Restaurar traz de volta o que foi apagado e desfaz as alterações feitas depois dessa cópia. O que foi criado depois dela continua no site. Antes de restaurar, o site baixa uma cópia do estado atual.</p>
       <div class="newrow"><button class="btn primary" data-act="bk-restore">Restaurar agora</button><button class="ghost" data-act="bk-cancel">Cancelar</button></div></div>` : ""}
+    ${(o => o.length ? `<h2>Ingredientes sem receita <small>${o.length}</small></h2>
+    <p class="hint">Sobraram de receitas alteradas e nenhuma receita usa. Não aparecem em lista nenhuma; pode excluir.</p>
+    <ul class="plain">${o.map(i => `<li><span>${esc(i.name)}</span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}">Excluir</button></li>`).join("")}</ul>` : "")(S.ingredients.filter(i => !S.recipe_items.some(x => x.ingredient_id === i.id)).sort((a, b) => a.name.localeCompare(b.name, "pt")))}
     ${noTrash ? "" : `<h2>Lixeira <small>${S.trash.length}</small></h2>
     <p class="hint">O que foi excluído fica aqui por 7 dias e pode voltar.</p>
     ${S.trash.length ? `<ul class="plain">${[...S.trash].sort((a, b) => String(b.deleted_at).localeCompare(String(a.deleted_at))).map(t => `<li><span>${esc(t.label)} <small class="note">${KIND[t.tbl] || ""}${t.deleted_by ? ", excluído por " + esc(t.deleted_by) : ""}</small></span><button class="ghost" data-act="restore" data-id="${t.id}">Restaurar</button></li>`).join("")}</ul>` : `<p class="empty">Vazia.</p>`}`}
