@@ -357,15 +357,15 @@
     return `<span class="acctbox"><button class="avatar" data-act="open" data-key="acct" aria-haspopup="menu" aria-expanded="${on}" aria-label="Conta de ${esc(name)}"><i>${esc(initials(name))}</i><span>${esc(name)}</span></button>
       ${on ? `<span class="amenu" role="menu"><button role="menuitem" data-go="cfg">Ajustes</button>${client ? `<button role="menuitem" data-act="logout">Sair</button>` : ""}</span>` : ""}</span>`;
   }
+  const HWAVE = `<svg class="hwave" viewBox="0 0 900 30" preserveAspectRatio="none" aria-hidden="true">${[0, 1, 2].map(k => { const y = 6 + k * 9, a = k % 2 ? 5 : -5; return `<path d="M-20 ${y} C 60 ${y + a}, 140 ${y - a}, 220 ${y} S 380 ${y + a}, 460 ${y} S 620 ${y - a}, 700 ${y} S 860 ${y + a}, 940 ${y}"/>`; }).join("")}</svg>`;
   function header() {
-    const st = headStat(shopping()), pct = st.n ? Math.round(100 * st.d / st.n) : 0;
-    const cap = st.n ? st.text.replace(/^\d+ de \d+ /, "").replace(/\.$/, "") : st.text;
+    const st = headStat(shopping()), pct = st.n ? Math.round(100 * st.d / st.n) : 0, C = 2 * Math.PI * 19;
     return `<div class="top-in">
-      <div class="top-row"><button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button>${acct()}</div>
-      <div class="top-main"><h1>${TITLE[ui.tab]}</h1>${st.n ? `<p class="top-n" aria-hidden="true"><b>${st.d}</b>/${st.n}</p>` : ""}</div>
-      ${st.n ? `<div class="meter" role="img" aria-label="${pct}% concluído"><i style="width:${pct}%"></i></div>` : ""}
-      <p class="status" aria-live="polite"><span class="sr">${esc(st.text)}</span><span aria-hidden="true">${esc(cap)}</span></p>
-    </div>`;
+      <div class="top-row"><button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button><span class="brand">Ano Novo 26/27</span>${acct()}</div>
+      <div class="top-main"><div class="top-t"><h1>${TITLE[ui.tab]}</h1>
+        <p class="status" aria-live="polite">${st.n ? `<b>${st.d}</b> de ${st.n} ${esc(st.text.replace(/^\d+ de \d+ /, "").replace(/\.$/, ""))}` : esc(st.text)}</p></div>
+        ${st.n ? `<svg class="ring" viewBox="0 0 48 48" role="img" aria-label="${pct}% concluído"><circle cx="24" cy="24" r="19"/>${pct ? `<circle class="on" cx="24" cy="24" r="19" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 24 24)"/>` : ""}<text x="24" y="28.5" text-anchor="middle">${pct}%</text></svg>` : ""}</div>
+    </div>${HWAVE}`;
   }
   const tick = (t, id, f, val, label) => `<label class="tick"><input type="checkbox" data-act="set" data-t="${t}" data-id="${id}" data-f="${f}" ${val ? "checked" : ""} aria-label="${esc(label)}"><span></span></label>`;
 
@@ -1040,7 +1040,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const tile = (tab, sec, title, big, small, sub, cls = "", alert = "") => `<button class="tile ${cls}" data-go="${tab}" data-sec="${sec}"><span class="tile-t">${title}</span><span class="tile-n">${big}<i>${small}</i></span><span class="tile-s">${sub}</span>${alert}${typeof small === "string" && small[0] === "/" && Number(small.slice(1)) ? `<span class="tile-bar" aria-hidden="true"><i style="width:${Math.round(100 * big / Number(small.slice(1)))}%"></i></span>` : ""}</button>`;
     const waves = [0, 1, 2, 3, 4, 5, 6].map(k => { const y = 10 + k * 12, a = k % 2 ? 7 : -7; return `<path d="M-20 ${y} C 60 ${y + a}, 140 ${y - a}, 220 ${y} S 380 ${y + a}, 460 ${y} S 620 ${y - a}, 700 ${y} S 860 ${y + a}, 940 ${y}"/>`; }).join("");
     return `<section class="hero">
-      <div class="top-row"><span>Ano Novo 26/27</span>${acct()}</div>
+      <div class="top-row"><span class="hbrand"><b>Ano Novo 26/27</b><small>${days.length ? (f => `${f(days[0].date)} a ${f(days[days.length - 1].date)}`)(d => { const [, m, dd] = d.split("-").map(Number); return `${dd} de ${["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"][m - 1]}`; }) : ""}</small></span>${acct()}</div>
       ${n === null ? "" : n > 0 ? `<p class="count"><b>${n}</b><span>${n === 1 ? "dia para" : "dias para"}<br>a viagem</span></p>` : `<p class="count"><b>Já</b><span>estamos<br>na viagem</span></p>`}
       <svg class="waves7" viewBox="0 0 900 96" preserveAspectRatio="none" aria-hidden="true">${waves}</svg>
     </section>
