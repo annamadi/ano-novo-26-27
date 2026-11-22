@@ -1015,9 +1015,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (el.classList.contains("lk-q")) { const k = norm(el.value); el.parentNode.querySelectorAll("[data-name]").forEach(b => { b.hidden = !!k && !b.dataset.name.includes(k); }); }
     if (el.dataset.act === "ing-hint") {
       const u = el.form.elements.unit, g = findIng(el.value);
-      const lock = !!g && !dens(g);
-      if (g) { if (!cupUnit(u.value)) u.value = g.unit; } else if (u.disabled || u.dataset.auto === u.value) u.value = "";
-      u.dataset.auto = g ? g.unit : ""; u.disabled = lock;
+      // sugere a unidade da lista, sem travar: quem escreveu outra unidade fica com a sua
+      if (!u.value || u.dataset.auto === u.value) u.value = g ? g.unit : "";
+      u.dataset.auto = g ? g.unit : "";
     }
   });
   view.addEventListener("focusout", () => setTimeout(() => { if (renderPending) render(false); }, 350));
@@ -1079,10 +1079,15 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       if (cu) {
         const d = old ? dens(old) : densByName(v("name"));
         if (d) { const n = qty || 1; qty = Math.round(n * cu * d); unit = old ? old.unit : isLiquid(v("name")) ? "ml" : "g"; toast(`${nf.format(n)} ${unit0(cu, n)} de ${v("name")}: ${qty} ${unit}.`); }
-        else if (old) return toast(`Não sei converter ${old.name} de xícara para ${old.unit || "a unidade da lista"}. Escreva a quantidade em ${old.unit || "unidades"}.`);
         else unit = cu === 1 ? "xícara" : "colher de sopa";
       }
-      const ing = ensureIngredient(v("name"), unit);
+      const sameU = (a, b) => { const k = x => norm(x).replace(/^(unidade|unidades|und|unid)$/, "un").replace(/s$/, ""); return k(a) === k(b); };
+      let ing;
+      if (old && unit && !sameU(unit, old.unit || "un")) {
+        // mesma comida em outra medida: não dá para somar g com unidade na lista de compras
+        if (!S.recipe_items.some(i => i.ingredient_id === old.id)) { update("ingredients", old.id, { unit }); ing = old; }
+        else { ing = ensureIngredient(`${old.name} (${unit})`, unit); toast(`${old.name} já está na lista em ${old.unit}. Criei "${ing.name}" para não misturar as medidas.`); }
+      } else ing = ensureIngredient(v("name"), unit);
       add("recipe_items", { id: uid(), recipe_id: f.dataset.id, ingredient_id: ing.id, qty, suggested: false, veg: "", note: "", pos: nextPos("recipe_items") });
     } else if (kind === "new-recipe") {
       const r = { id: uid(), name: v("name"), block: v("block"), reviewed: false, reviewed_by: "", serves: "", weekly: false, notes: "", prep: "", pos: nextPos("recipes") };
