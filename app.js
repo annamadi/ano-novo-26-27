@@ -662,7 +662,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       </form>`}
       ${flat === true ? gtools("r-" + r.id, "Definir responsável pelos itens") : ""}
       </section>
-      ${flat === true ? "" : `<section class="rsec"><h3><label for="prep-${r.id}">Modo de preparo e notas</label></h3><textarea id="prep-${r.id}" data-act="set" data-t="recipes" data-id="${r.id}" data-f="prep" rows="${Math.min(12, Math.max(3, (r.prep || "").split("\n").length + 1))}" placeholder="Passos, dicas, quem faz">${esc(r.prep)}</textarea></section>`}
+      ${flat === true ? "" : `<section class="rsec"><h3><label for="prep-${r.id}">Modo de preparo e notas</label></h3><textarea id="prep-${r.id}" data-act="set" data-t="recipes" data-id="${r.id}" data-f="prep" rows="${Math.min(12, Math.max(3, (r.prep || "").split("\n").length + 1))}" placeholder="Passos, dicas, quem faz">${esc(r.prep)}</textarea>${linkList(r.prep)}</section>`}
       <section class="rsec">      ${!hasCol("pendencias", "recipe_id") ? "" : `<h3>Dúvidas ${qs.length ? `<small>${qs.filter(p => p.done).length} de ${qs.length} resolvidas</small>` : ""}</h3>
       ${qs.length ? `<ul class="pend">${qs.map(p => pendRow(p, true)).join("")}</ul>` : ""}
       <form class="newrow one" data-form="add-pend" data-recipe="${r.id}"><input name="subject" placeholder="Escrever uma dúvida (use @ para marcar alguém)" data-sug="mention" autocomplete="off" required aria-label="Nova dúvida sobre esta receita"><button class="btn">Adicionar</button></form>`}</section>
@@ -766,7 +766,18 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   const fmtWhen = v => { const d = new Date(v); return isNaN(d) ? "" : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); };
   // @Nome: destaca e avisa a pessoa marcada
   const mentionRe = () => { const n = peopleNames().sort((a, b) => b.length - a.length).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")); return n.length ? new RegExp("@(" + n.join("|") + ")(?![\\p{L}\\d])", "giu") : null; };
-  const rich = t => { const re = mentionRe(), e = esc(t); return re ? e.replace(re, m => `<b class="mention">${m}</b>`) : e; };
+  // endereço vira link com nome curto ("vídeo no Instagram") em vez do endereço inteiro
+  const URL_RE = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)]/g;
+  const SITES = [[/tiktok\.com/, "vídeo no TikTok"], [/youtube\.com|youtu\.be/, "vídeo no YouTube"], [/instagram\.com/, "vídeo no Instagram"]];
+  const linkName = u => { const k = SITES.find(([re]) => re.test(u)); if (k) return k[1]; try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return "link"; } };
+  const anchor = u => `<a class="xlink" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(linkName(u))}</a>`;
+  const rich = t => {
+    const re = mentionRe(), part = x => { const e = esc(x); return re ? e.replace(re, m => `<b class="mention">${m}</b>`) : e; };
+    let out = "", last = 0; const str = String(t || "");
+    for (const m of str.matchAll(URL_RE)) { out += part(str.slice(last, m.index)) + anchor(m[0]); last = m.index + m[0].length; }
+    return out + part(str.slice(last));
+  };
+  const linkList = t => { const l = [...new Set(String(t || "").match(URL_RE) || [])]; return l.length ? `<p class="links">${l.map((u, i) => { const before = String(t).slice(0, String(t).indexOf(u)).split("\n").pop().replace(/^[\d.\-\s]+/, "").replace(/[:\s]+$/, ""); return `<a class="xlink" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(before && before.length < 70 ? before : linkName(u))}</a>`; }).join("")}</p>` : ""; };
   const pendText = p => [p.subject, p.detail, ...S.comments.filter(c => c.pend_id === p.id).map(c => c.body)].join(" ");
   const myName = () => client ? (peopleNames().find(n => norm(n) === norm(who)) || who || "") : meName();
   const tagsMe = p => { const me = norm(myName()), re = mentionRe(); return !!me && !!re && !p.done && [...pendText(p).matchAll(re)].some(m => norm(m[1]) === me); };

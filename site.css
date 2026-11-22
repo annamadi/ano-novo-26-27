@@ -608,3 +608,8 @@ body.scrolled .mini { transform: none; visibility: visible; }
 .bkbox p { margin: 0 0 6px; }
 .bkbox .hint { color: inherit; max-width: none; }
 .note.from { display: block; }
+
+/* links em comentários e no modo de preparo */
+.xlink { color: var(--gold-deep); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.links { display: grid; gap: 4px; margin: 8px 0 0; }
+.links .xlink { min-height: 32px; display: inline-flex; align-items: center; }
