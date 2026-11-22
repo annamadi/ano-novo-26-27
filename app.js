@@ -174,7 +174,7 @@
   async function refresh() {
     if (!client) return;
     await flush();
-    try { needsSetup = false; await fetchAll(); render(false); } catch (e) { console.error(e); }
+    try { needsSetup = noTrash = noComments = noPrivate = false; await fetchAll(); render(false); } catch (e) { console.error(e); }
   }
   async function loadAll() {
     if (client) {
@@ -237,6 +237,7 @@
   const isChk = it => checkers(it).length > 0;
   const isRev = r => { if (!CK()) return !!r.reviewed; if (r.brought) return true; const l = S.recipe_items.filter(i => i.recipe_id === r.id); return l.length > 0 && l.every(isChk); };
   const LEAF = `<svg class="leaf" viewBox="0 0 24 24" role="img" aria-label="opção vegetariana"><path d="M5 19c0-8 5-13 14-14 0 9-5 14-13 14M5 19l7-7"/></svg>`;
+  const LEAF_H = LEAF.replace('role="img" aria-label="opção vegetariana"', 'aria-hidden="true"');
   const vegRows = r => S.recipe_items.filter(i => i.recipe_id === r.id && i.veg === "sim").sort(byPos);
   const vegItems = r => vegRows(r).map(i => (get("ingredients", i.ingredient_id) || {}).name).filter(Boolean);
   const dayRecs = d => S.menu.filter(m => m.day_id === d.id).sort(byPos).map(m => get("recipes", m.recipe_id)).filter(Boolean);
@@ -246,7 +247,6 @@
   const dayVegState = d => { const rs = dayRecs(d), any = rs.some(r => r.block === VEG || vegRows(r).length);
     if (!any) return "miss"; if (!CK()) return "ok";
     return rs.some(r => r.block === VEG ? isRev(r) : vegRows(r).some(isChk)) ? "ok" : "pend"; };
-  const dayVegOk = d => dayVegState(d) === "ok";
   const vegTag = d => { const st = dayVegState(d); return st === "miss" ? `<span class="tag sug">falta opção vegetariana</span>` : `<span class="vegline ${st}">${LEAF}<span>${esc(dayVeg(d))}${st === "pend" ? " (a conferir)" : ""}</span></span>`; };
   // ingrediente -> receitas do cardápio que usam ele e ainda não foram conferidas
   function unreviewed() {
@@ -299,12 +299,13 @@
 
   /* ---------- render ---------- */
   // rascunho = texto digitado num formulário que ainda não foi enviado (ou numa busca): sobrevive ao redesenho da tela
-  const draftKey = el => { const f = el.closest("form[data-form]"); return f ? [f.dataset.form, f.dataset.id || f.dataset.pend || f.dataset.item || f.dataset.recipe || f.dataset.activity || "", el.name].join("|") : el.id || ""; };
-  const draftEls = () => [...view.querySelectorAll("form[data-form]:not([data-sent]) input[name], form[data-form]:not([data-sent]) textarea[name], #pend-q")].filter(el => el.type !== "checkbox" && draftKey(el));
+  const draftKey = el => { const f = el.closest("form[data-form]"); return f ? [ui.tab, f.dataset.form, f.dataset.buy || "", f.dataset.id || f.dataset.pend || f.dataset.item || f.dataset.recipe || f.dataset.activity || "", el.name].join("|") : el.id || ""; };
+  const draftEls = () => [...view.querySelectorAll("form[data-form]:not([data-sent]) input[name], form[data-form]:not([data-sent]) textarea[name], form[data-form]:not([data-sent]) select[name], #pend-q")].filter(el => el.type !== "checkbox" && el.type !== "file" && draftKey(el));
   function render(force) {
     const a = document.activeElement;
     if (!force && a && view.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "checkbox") { renderPending = true; return; }
-    const drafts = new Map(draftEls().filter(el => el.value && el.value !== el.defaultValue).map(el => [draftKey(el), el.value]));
+    const dflt = el => el.tagName === "SELECT" ? (el.options[0] || {}).value : el.defaultValue;
+    const drafts = new Map(draftEls().filter(el => el.value && el.value !== dflt(el)).map(el => [draftKey(el), el.value]));
     renderPending = false;
     const sec = SEC[ui.tab];
     $("#app").dataset.sec = sec;
@@ -321,7 +322,7 @@
     const shNew = view.querySelector(".sheet"); if (shNew) shNew.scrollTop = shY;
     document.body.classList.toggle("locked", !!shNew);
     markScroll();
-    if (drafts.size) draftEls().forEach(el => { const v = drafts.get(draftKey(el)); if (v !== undefined && el.value === el.defaultValue) { el.value = v; if (el.id === "pend-q") el.dispatchEvent(new Event("input", { bubbles: true })); } });
+    if (drafts.size) draftEls().forEach(el => { const v = drafts.get(draftKey(el)); if (v !== undefined && el.value === dflt(el)) { el.value = v; if (el.name === "sector") el.dataset.touched = "1"; if (el.id === "pend-q" || el.dataset.act === "ing-hint") el.dispatchEvent(new Event("input", { bubbles: true })); } });
     view.querySelectorAll("input[placeholder]:not([aria-label])").forEach(i => { if (!i.closest("label")) i.setAttribute("aria-label", i.placeholder); });
     $("#top").innerHTML = ui.tab === "start" ? "" : header();
     const hs = ui.tab === "start" ? null : headStat(shopping());
@@ -478,7 +479,7 @@
   const short = n => String(n).replace(/\s*\(.*\)$/, "");
   function byCat(rs) {
     const m = new Map();
-    [...rs].sort((a, b) => BLOCKS.indexOf(a.block) - BLOCKS.indexOf(b.block)).forEach(r => (m.get(r.block) || m.set(r.block, []).get(r.block)).push(r));
+    [...rs].sort((a, b) => ((BLOCKS.indexOf(a.block) + 99) % 99) - ((BLOCKS.indexOf(b.block) + 99) % 99)).forEach(r => (m.get(r.block) || m.set(r.block, []).get(r.block)).push(r));
     return [...m];
   }
   function recipeOptions(sel) {
@@ -518,12 +519,12 @@
     const names = d => S.menu.filter(m => m.day_id === d.id).sort(byPos).map(m => get("recipes", m.recipe_id)).filter(Boolean);
     const cal = () => `<div class="hbox"><div class="calwrap"><div class="cal" style="--n:${days.length}">
       ${days.map(d => {
-        const [y, m, dd] = d.date.split("-").map(Number), wd = new Date(y, m - 1, dd).getDay(), L = dayLabel(d, true), ds = names(d);
-        return `<button class="calday ${d.veg_guest ? "veg" : ""}" data-act="goto-day" data-id="${d.id}" aria-label="Abrir ${L.wk} ${L.dd}">
+        const [y, m, dd] = d.date.split("-").map(Number), L = dayLabel(d, true), ds = names(d);
+        return `<button class="calday ${d.veg_guest ? "veg" : ""}" data-act="goto-day" data-id="${d.id}" aria-label="Abrir ${L.wk} ${L.dd}: ${esc(byCat(ds).map(([b, l]) => (b === "Jantar" ? "" : b + ": ") + l.map(r => r.name).join(", ")).join("; ") || "sem prato")}${d.veg_guest ? ". " + ({ ok: "Opção vegetariana conferida", pend: "Opção vegetariana a conferir", miss: "Falta opção vegetariana" })[dayVegState(d)] : ""}">
           <span class="calnum"><b>${L.dd}</b> ${L.wk}, ${L.mon}</span>
           ${byCat(ds).map(([b, l]) => b === "Jantar" ? l.map(r => `<span class="dish main">${esc(short(r.name))}</span>`).join("")
             : `<span class="dgrp k-${CAL_KIND[b] || "x"}"><span class="sr">${esc(b)}: </span>${l.map(r => `<span>${esc(short(r.name))}</span>`).join("")}</span>`).join("") || `<span class="dish none">sem prato</span>`}
-          <span class="calfoot">${d.people} pessoas${d.veg_guest ? (st => `<span class="vflag ${st}">${LEAF}${st === "ok" ? "vegetariana ok" : st === "pend" ? "vegetariana a conferir" : "falta vegetariana"}</span>`)(dayVegState(d)) : ""}</span>
+          <span class="calfoot">${d.people} pessoas${d.veg_guest ? (st => `<span class="vflag ${st}">${LEAF_H}${st === "ok" ? "vegetariana ok" : st === "pend" ? "vegetariana a conferir" : "falta vegetariana"}</span>`)(dayVegState(d)) : ""}</span>
         </button>`;
       }).join("")}</div></div>${MORE}</div>
       <p class="callegend" aria-hidden="true"><span class="k-veg">Opção vegetariana</span><span class="k-side">Acompanhamento</span><span class="k-sweet">Sobremesa</span></p>
@@ -557,7 +558,7 @@
           <label class="sw"><input type="checkbox" data-act="weekly-sw" data-id="${r.id}" ${recipeCount(r) ? "checked" : ""} aria-label="${esc(r.name)}: está no cardápio"><span></span></label></li>`; }).join("")}</ul>`;
     }).join("")}
     ${dinnerIdeas.length ? `<h2>Sugestões</h2>
-    <p class="hint">Jantares e opções vegetarianas sem dia marcado. Ficam fora das compras; para usar, abra a receita e marque um dia.</p>
+    <p class="hint">Jantares, acompanhamentos e opções vegetarianas sem dia marcado. Ficam fora das compras; para usar, abra a receita e marque um dia.</p>
     <ul class="plain">${dinnerIdeas.map(r => `<li><button class="rowlink" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}</button></li>`).join("")}</ul>` : ""}
     ${ui.sheet ? daySheet(get("days", ui.sheet)) : ""}`;
   }
@@ -699,7 +700,6 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         ? `<span>Revisada${r.reviewed_by ? " por " + esc(r.reviewed_by) : ""}. Ingredientes e quantidades confirmados.</span><button class="ghost" data-act="review" data-id="${r.id}" data-v="0">Desfazer</button>`
         : qOpen ? `<span>Resolva ${qOpen === 1 ? "a dúvida acima" : `as ${qOpen} dúvidas acima`} antes de marcar como revisada.</span>`
         : `<span>Leu a lista inteira?</span><button class="btn primary" data-act="review" data-id="${r.id}" data-v="1">Marcar como revisada</button>`}</div>`}
-      ${flat === true || flat === "page" ? "" : `<button class="ghost chev rdet" data-act="open" data-key="det-${r.id}" aria-expanded="${ui.open.has("det-" + r.id)}">Detalhes da receita</button>${ui.open.has("det-" + r.id) ? detBlock : ""}`}
     </div>`;
     const badges = `${r.brought ? `<span class="tag">leva pronto</span>` : ""}${qOpen ? `<span class="tag nov">${qOpen} ${qOpen === 1 ? "dúvida" : "dúvidas"}</span>` : ""}${st.idea ? "" : isRev(r) ? `<span class="tag ok">conferida</span>` : `<span class="tag sug">a conferir</span>`}`;
     if (flat === true) return `<article class="recipe open flat" id="r-${r.id}">${body}</article>`;
@@ -791,21 +791,23 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   const mentionRe = () => { const n = peopleNames().sort((a, b) => b.length - a.length).map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")); return n.length ? new RegExp("@(" + n.join("|") + ")(?![\\p{L}\\d])", "giu") : null; };
   // endereço vira link com nome curto ("vídeo no Instagram") em vez do endereço inteiro
   const URL_RE = /https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)]/g;
-  const SITES = [[/tiktok\.com/, "vídeo no TikTok"], [/youtube\.com|youtu\.be/, "vídeo no YouTube"], [/instagram\.com/, "vídeo no Instagram"]];
+  const SITES = [[/tiktok\.com/, "vídeo no TikTok"], [/youtube\.com|youtu\.be/, "vídeo no YouTube"], [/instagram\.com/, "vídeo no Instagram"]].map(([re, n]) => [new RegExp("^https?://([\\w-]+\\.)*(" + re.source + ")(/|$)"), n]);
+  // endereços do texto; inclui o ")" final quando ele fecha um "(" do próprio endereço (Wikipedia)
+  const urlsIn = str => [...String(str || "").matchAll(URL_RE)].map(m => { let u = m[0]; const nx = str[m.index + u.length]; if (nx === ")" && (u.match(/\(/g) || []).length > (u.match(/\)/g) || []).length) u += ")"; return { u, i: m.index }; });
   const linkName = u => { const k = SITES.find(([re]) => re.test(u)); if (k) return k[1]; try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return "link"; } };
   const anchor = u => `<a class="xlink" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(linkName(u))}</a>`;
   const rich = t => {
     const re = mentionRe(), part = x => { const e = esc(x); return re ? e.replace(re, m => `<b class="mention">${m}</b>`) : e; };
     let out = "", last = 0; const str = String(t || "");
-    for (const m of str.matchAll(URL_RE)) { out += part(str.slice(last, m.index)) + anchor(m[0]); last = m.index + m[0].length; }
+    for (const { u, i } of urlsIn(str)) { out += part(str.slice(last, i)) + anchor(u); last = i + u.length; }
     return out + part(str.slice(last));
   };
   const LINK_ICO = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7.5v9l7-4.5z"/></svg>`;
   // links do texto como etiquetas: nome do site em destaque e, se houver, a descrição escrita antes do endereço
-  const linkList = t => { const str = String(t || ""), l = [...new Set(str.match(URL_RE) || [])]; if (!l.length) return "";
+  const linkList = t => { const str = String(t || ""), l = [...new Set(urlsIn(str).map(x => x.u))]; if (!l.length) return "";
     return `<div class="links">${l.map(u => { const before = str.slice(0, str.indexOf(u)).split("\n").pop().replace(/^[\d.\-\s]+/, "").replace(/[:\s]+$/, "");
       const k = SITES.find(([re]) => re.test(u)), site = k ? k[1].replace("vídeo no ", "") : linkName(u);
-      const desc = before && before.length < 90 ? before.replace(new RegExp("^" + site + "[,:\\s]*", "i"), "") : "";
+      const desc = before && before.length < 90 ? (norm(before).startsWith(norm(site)) ? before.slice(site.length).replace(/^[,:\s]+/, "") : before) : "";
       return `<a class="lchip" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${LINK_ICO}<span><b>${esc(site)}</b>${desc ? `<small>${esc(desc)}</small>` : ""}</span></a>`; }).join("")}</div>`; };
   const pendText = p => [p.subject, p.detail, ...S.comments.filter(c => c.pend_id === p.id).map(c => c.body)].join(" ");
   const myName = () => client ? (peopleNames().find(n => norm(n) === norm(who)) || who || "") : meName();
@@ -940,7 +942,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     ${groupList(take, "origin", tot, "h3", "mt") || `<p class="empty">${takeAll.length ? "Nenhum item com esses filtros." : "Nenhum item para levar. Defina os responsáveis na aba Levar."}</p>`}
     ${norm(me) === norm(myName()) && !noPrivate ? (pv => `<h2 class="sec">Só para mim <small>${pv.filter(p => p.done).length}/${pv.length}</small></h2>
     <p class="hint">Só você vê esta lista, em qualquer aparelho em que entrar. Boa para a sua mala.</p>
-    <ul class="shop xlist plist">${pv.map(p => `<li class="prow ${p.done ? "done" : ""}">${tick("private", p.id, "done", p.done, "Feito: " + p.item)}<input data-act="set" data-t="private" data-id="${p.id}" data-f="item" value="${esc(p.item)}" aria-label="Item"><button class="x" data-act="del" data-t="private" data-id="${p.id}" aria-label="Tirar ${esc(p.item)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></li>`).join("")}</ul>
+    <ul class="shop xlist plist">${pv.map(p => `<li class="prow ${p.done ? "done" : ""}">${tick("private", p.id, "done", p.done, "Feito: " + p.item)}<input data-act="set" data-t="private" data-id="${p.id}" data-f="item" value="${esc(p.item)}" aria-label="Item: ${esc(p.item)}"><button class="x" data-act="del" data-t="private" data-id="${p.id}" aria-label="Tirar ${esc(p.item)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg></button></li>`).join("")}</ul>
     <form class="newrow one" data-form="add-private"><input name="item" placeholder="Adicionar à minha lista particular" required><button class="btn">Adicionar</button></form>`)([...S.private].sort((a, b) => (a.done - b.done) || byPos(a, b))) : ""}`;
   }
 
@@ -948,12 +950,12 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   const BK_LABEL = { people: "pessoas", ingredients: "ingredientes", recipes: "receitas", days: "dias", activities: "atividades", recipe_items: "linhas de receita", menu: "pratos no cardápio", extras: "itens avulsos", pendencias: "pendências", comments: "comentários" };
   function downloadBackup(tag = "copia") {
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([JSON.stringify({ exportado_em: new Date().toISOString(), dados: S }, null, 1)], { type: "application/json" }));
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ exportado_em: new Date().toISOString(), dados: Object.fromEntries(Object.entries(S).filter(([t]) => t !== "private")) }, null, 1)], { type: "application/json" }));
     a.download = `ano-novo-${tag}-${new Date().toLocaleDateString("sv")}.json`; a.click(); URL.revokeObjectURL(a.href);
   }
   async function restoreBackup() {
-    const bk = ui.bk; if (!bk) return;
-    downloadBackup("antes-de-restaurar");
+    const bk = ui.bk; if (!bk || bk.busy) return;
+    bk.busy = true; downloadBackup("antes-de-restaurar");
     let n = 0;
     try {
       for (const t of BK_ORDER) {
@@ -962,14 +964,14 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
           // só as colunas que o banco tem hoje (a cópia pode ser mais antiga ou mais nova)
           const cols = S[t][0] ? Object.keys(S[t][0]) : null;
           if (cols) rows = rows.map(r => Object.fromEntries(cols.filter(c => c in r).map(c => [c, r[c]])));
-          for (let i = 0; i < rows.length; i += 200) { const { error } = await client.from(PREFIX + t).upsert(rows.slice(i, i + 200)); if (error) throw new Error(`${BK_LABEL[t]}: ${error.message}`); }
+          for (let i = 0; i < rows.length; i += 200) { const { error } = await client.from(PREFIX + t).upsert(rows.slice(i, i + 200), { defaultToNull: false }); if (error) throw new Error(`${BK_LABEL[t]}: ${error.message}`); }
         } else rows.forEach(r => { const k = S[t].findIndex(x => x.id === r.id); if (k >= 0) S[t][k] = r; else S[t].push(r); });
         n += rows.length;
       }
       ui.bk = null;
       if (client) await fetchAll(); else saveLocal();
       render(true); toast(`Cópia restaurada: ${n} registros.`);
-    } catch (e) { console.error(e); render(true); toast(`A restauração parou: ${e.message}. Nada foi apagado; tente de novo.`); }
+    } catch (e) { console.error(e); bk.busy = false; render(true); toast(`A restauração parou: ${e.message}. Nada foi apagado; tente de novo.`); }
   }
   function vCfg() {
     const people = `<h2>Pessoas do grupo</h2>
@@ -978,17 +980,17 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <form class="newrow" data-form="add-person"><input name="name" placeholder="Nome da pessoa" required><button class="btn">Adicionar pessoa</button></form>`;
     return `${people}
     <h2>Cópia e exportação</h2>
-    <p class="hint">A cópia de segurança guarda tudo num arquivo. A planilha traz compras, o que levar, cardápio, receitas e pendências.</p>
+    <p class="hint">A cópia de segurança guarda tudo num arquivo, menos as listas particulares. A planilha traz compras, o que levar, cardápio, receitas e pendências.</p>
     <div class="newrow"><button class="btn" data-act="backup">Baixar cópia de segurança</button><button class="btn" data-act="xlsx">Exportar planilha</button>
-      <label class="btn filebtn">Restaurar de uma cópia<input type="file" id="bk-file" accept="application/json,.json" hidden></label></div>
+      <label class="btn filebtn">Restaurar de uma cópia<input type="file" id="bk-file" class="sr" accept="application/json,.json"></label></div>
     ${ui.bk ? `<div class="bkbox" role="group" aria-label="Restaurar cópia de segurança">
       <p><b>${esc(ui.bk.name)}</b>, feita em ${esc(fmtWhen(ui.bk.when) || "data desconhecida")}.</p>
       <p>${BK_ORDER.map(t => `${(ui.bk.data[t] || []).length} ${BK_LABEL[t]}`).join(", ")}.</p>
       <p class="hint">Restaurar traz de volta o que foi apagado e desfaz as alterações feitas depois dessa cópia. O que foi criado depois dela continua no site. Antes de restaurar, o site baixa uma cópia do estado atual.</p>
-      <div class="newrow"><button class="btn primary" data-act="bk-restore">Restaurar agora</button><button class="ghost" data-act="bk-cancel">Cancelar</button></div></div>` : ""}
+      <div class="newrow"><button class="btn primary" data-act="bk-restore" ${ui.bk.busy ? "disabled" : ""}>${ui.bk.busy ? "Restaurando…" : "Restaurar agora"}</button>${ui.bk.busy ? "" : `<button class="ghost" data-act="bk-cancel">Cancelar</button>`}</div></div>` : ""}
     ${(o => o.length ? `<h2>Ingredientes sem receita <small>${o.length}</small></h2>
     <p class="hint">Sobraram de receitas alteradas e nenhuma receita usa. Não aparecem em lista nenhuma; pode excluir.</p>
-    <ul class="plain">${o.map(i => `<li><span>${esc(i.name)}</span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}">Excluir</button></li>`).join("")}</ul>` : "")(S.ingredients.filter(i => !S.recipe_items.some(x => x.ingredient_id === i.id)).sort((a, b) => a.name.localeCompare(b.name, "pt")))}
+    <ul class="plain">${o.map(i => `<li><span>${esc(i.name)}</span><button class="ghost" data-act="del" data-t="ingredients" data-id="${i.id}">Excluir</button></li>`).join("")}</ul>` : "")(S.ingredients.filter(i => !S.recipe_items.some(x => x.ingredient_id === i.id) && !S.trash.some(t => ((t.payload || {}).recipe_items || []).some(x => x.ingredient_id === i.id))).sort((a, b) => a.name.localeCompare(b.name, "pt")))}
     ${noTrash ? "" : `<h2>Lixeira <small>${S.trash.length}</small></h2>
     <p class="hint">O que foi excluído fica aqui por 7 dias e pode voltar.</p>
     ${S.trash.length ? `<ul class="plain">${[...S.trash].sort((a, b) => String(b.deleted_at).localeCompare(String(a.deleted_at))).map(t => `<li><span>${esc(t.label)} <small class="note">${KIND[t.tbl] || ""}${t.deleted_by ? ", excluído por " + esc(t.deleted_by) : ""}</small></span><button class="ghost" data-act="restore" data-id="${t.id}">Restaurar</button></li>`).join("")}</ul>` : `<p class="empty">Vazia.</p>`}`}
@@ -1012,7 +1014,6 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const act = S.recipes.filter(r => recipeCount(r) && r.block !== "Casa"), open = S.pendencias.filter(p => !p.done).length;
     const nextIds = new Set(next ? buy.filter(en => en.k === "i" && keyOf(en, "when_buy") === next[0] && !isDone(en)).map(en => en.r.id) : []);
     const buyNo = buy.filter(en => !en.r.owner && !isDone(en)).length, takeNo = take.filter(en => !en.r.owner && !isDone(en)).length;
-    const vegMiss = days.filter(d => d.veg_guest && !dayVegOk(d));
     const todo = new Map();
     S.recipe_items.forEach(it => { if (!nextIds.has(it.ingredient_id)) return; const r = get("recipes", it.recipe_id); if (r && !isRev(r) && recipeCount(r) && !(CK() && isChk(it))) todo.set(r.id, (todo.get(r.id) || 0) + 1); });
     const cnt = (l, f) => l.filter(f).length;
@@ -1028,7 +1029,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     <h2 class="vh">Cardápio da semana</h2>
     <div class="hbox"><div class="strip">${days.map(d => { const L = dayLabel(d, true), ds = S.menu.filter(m => m.day_id === d.id).sort(byPos).map(m => get("recipes", m.recipe_id)).filter(Boolean);
       return `<button class="sday ${d.veg_guest ? "veg" : ""}" data-act="goto-day" data-id="${d.id}"><span class="sd-h"><b>${L.dd}</b><span>${L.wk}</span></span>${ds.length ? byCat(ds).map(([b, l]) => b === "Jantar" ? `<em class="main">${esc(l.map(r => short(r.name)).join(", "))}</em>`
-        : `<small class="cat">${esc(b)}</small><em>${esc(l.map(r => short(r.name)).join(", "))}</em>`).join("") : `<em class="none">sem prato</em>`}${d.veg_guest ? (st => `<span class="vflag ${st}">${LEAF}${st === "ok" ? "vegetariana ok" : st === "pend" ? "vegetariana a conferir" : "falta vegetariana"}</span>`)(dayVegState(d)) : ""}</button>`; }).join("")}</div>${MORE}</div>
+        : `<small class="cat">${esc(b)}</small><em>${esc(l.map(r => short(r.name)).join(", "))}</em>`).join("") : `<em class="none">sem prato</em>`}${d.veg_guest ? (st => `<span class="vflag ${st}">${LEAF_H}${st === "ok" ? "vegetariana ok" : st === "pend" ? "vegetariana a conferir" : "falta vegetariana"}</span>`)(dayVegState(d)) : ""}</button>`; }).join("")}</div>${MORE}</div>
     ${next ? `<div class="nextbuy"><button class="nb-main" data-go="shop"><span>Próxima leva de compras</span><strong>${esc(next[0])}</strong><em>${next[1]} ${next[1] === 1 ? "item por comprar" : "itens por comprar"}</em></button>
       ${todo.size ? `<button class="nb-sub chev" data-act="open" data-key="todo" aria-expanded="${ui.open.has("todo")}">Antes, conferir ${todo.size} ${todo.size === 1 ? "receita" : "receitas"}</button>` : `<span class="nb-ok">As receitas dessa leva já foram conferidas.</span>`}</div>
     ${todo.size && ui.open.has("todo") ? `<ul class="plain">${[...todo].map(([id, c]) => `<li><button class="rowlink" data-act="open-recipe" data-id="${id}">${esc(get("recipes", id).name)}<small>${c} ${c === 1 ? "item" : "itens"} nessa leva</small></button></li>`).join("")}</ul>` : ""}` : ""}
@@ -1137,6 +1138,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       const { t, id, f } = el.dataset;
       let v = el.type === "checkbox" ? el.checked : el.dataset.num ? num(el.value) : el.type === "number" ? (parseInt(el.value, 10) || 0) : el.value;
       const patch = { [f]: v };
+      if (t === "private" && f === "item" && !String(v).trim()) return render(true);
       if (t === "recipe_items" && f === "qty" && !CK()) patch.suggested = false;
       if (t === "ingredients" && f === "name") {
         v = v.trim(); const dup = findIng(v);
@@ -1318,7 +1320,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     else if (act === "clear-take") { ui.tWho = ui.tStatus = ""; render(true); }
     else if (act === "fsheet") { ui.fsheet = !!el.dataset.v; render(true); const x = document.getElementById("sheet-x"); if (x) x.focus(); else { const b = view.querySelector(".fbtn"); if (b) b.focus(); } }
     else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ui.fNoQty = ""; render(true); }
-    else if (act === "logout") { client.auth.signOut().then(() => location.reload()); }
+    else if (act === "logout") { queue = queue.filter(j => j.table !== "private"); saveQueue(); client.auth.signOut().then(() => location.reload()); }
   });
   view.addEventListener("submit", e => {
     e.preventDefault();
@@ -1366,7 +1368,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       add("comments", { id: uid(), pend_id: f.dataset.pend, author: who, body: v("body"), created_at: new Date().toISOString() });
     } else if (kind === "paste-recipe") {
       const lines = v("text").split("\n").map(parseLine).filter(Boolean);
-      if (!lines.length) return toast("Não encontrei ingredientes no texto.");
+      if (!lines.length) { delete f.dataset.sent; return toast("Não encontrei ingredientes no texto."); }
       const r = { id: uid(), name: v("name"), block: v("block"), reviewed: false, reviewed_by: "", serves: "", weekly: false, notes: "", prep: "", pos: nextPos("recipes") };
       S.recipes.push(r); persist("recipes", r);
       let novos = 0, pos = nextPos("recipe_items");
@@ -1383,7 +1385,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       toast(`Receita criada com ${lines.length} ingredientes${novos ? `, ${novos} novos` : ""}. Confira as quantidades.`);
     } else if (kind === "add-person") {
       const name = v("name");
-      if (S.people.some(p => norm(p.name) === norm(name))) return toast(`${name} já está na lista.`);
+      if (S.people.some(p => norm(p.name) === norm(name))) { delete f.dataset.sent; return toast(`${name} já está na lista.`); }
       add("people", { id: uid(), name, pos: nextPos("people") });
     }
   });
