@@ -743,7 +743,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
         ${active ? `<button class="ghost" data-act="clear-filters">Limpar filtros</button>` : ""}</div>
     </section>` : ""}
     ${paid || active || ui.fStatus ? `<p class="hint">${paid ? `R$ ${money.format(paid)} pagos até agora (${esc(paidBy(all))}). ` : ""}${active || ui.fStatus ? `Mostrando ${shown.length} de ${all.length} itens.` : ""}</p>` : ""}
-    <p class="taglegend" aria-hidden="true">${shown.some(en => en.k === "i" && revMap.has(en.r.id)) ? `<span><i style="background:var(--gold);width:7px;height:7px"></i>quantidade a conferir</span>` : ""}<span><i style="background:#7A8B4A"></i>seção</span><span><i style="background:#5B7A99"></i>momento</span><span><i style="background:#9A5B6E"></i>loja</span></p>
+    ${shown.some(en => en.k === "i" && revMap.has(en.r.id)) ? `<p class="shoplegend" aria-hidden="true"><i class="qdot"></i>quantidade ainda a conferir</p>` : ""}
     ${groupList(shown, ui.group, tot, "h2", active || ui.fStatus ? "shopf" : "shop", !!(active || ui.fStatus)) || `<p class="empty">${all.length ? "Nenhum item com esses filtros." : "Nada para comprar: o cardápio está vazio."}</p>`}
     <button class="btn sm addx" data-act="open" data-key="newbuy" aria-expanded="${ui.open.has("newbuy")}">${ui.open.has("newbuy") ? "Fechar" : "+ Compra que não é comida"}</button>
     ${ui.open.has("newbuy") ? `<form class="newrow" data-form="add-extra" data-buy="1"><input name="item" placeholder="O que comprar" required><button class="btn">Adicionar</button></form>` : ""}
@@ -762,7 +762,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
 
           i.owner ? `<span class="tag who">${esc(i.owner)}</span>` : "",
           i.bought && i.bought_by ? `<span class="tag ok">pago por ${esc(i.bought_by)}</span>` : "",
-          g !== "sector" && secOf(i) ? `<span class="tag t-sec">${esc(secOf(i))}</span>` : "",
+          g !== "sector" && secOf(i) ? `<span class="tag sec-${SECTORS.indexOf(secOf(i))}">${esc(secOf(i))}</span>` : "",
           g !== "when_buy" && whenOf(i) && !isHome(i) ? `<span class="tag t-when">${esc(whenOf(i))}</span>` : "",
           bfCol() && isBF(i) && !isHome(i) && whenOf(i) !== BF ? `<span class="tag t-when">era Black Friday</span>` : "",
           isFreeze(i) && !isHome(i) ? `<span class="tag t-frz">congelar</span>` : "",

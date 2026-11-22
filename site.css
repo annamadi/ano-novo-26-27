@@ -750,14 +750,18 @@ h2.grp-h .grp-n { font: 500 1.22rem/1.2 var(--display); }
 .rsec > h3 { font: 500 1.28rem/1.2 var(--display); letter-spacing: -.005em; }
 .rsec > h3 small { font: 600 .8rem var(--body); color: var(--gold-deep); background: var(--mist); border-radius: 99px; padding: 2px 9px; }
 
-/* etiquetas com um ponto de cor por tipo */
-.tag[class*=" t-"]::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--muted); }
-.tag.t-sec::before { background: #7A8B4A; }
-.tag.t-when::before { background: #5B7A99; }
-.tag.t-store::before { background: #9A5B6E; }
-.tag.t-frz::before { background: #4E9AA6; }
-.tag.t-act::before { background: #8B6BB0; }
-.tag.t-rec::before { background: #2E6B52; }
-.taglegend { display: flex; flex-wrap: wrap; gap: 2px 14px; margin: 2px 0 6px; font-size: .82rem; color: var(--muted); }
-.taglegend span { display: inline-flex; align-items: center; gap: 6px; }
-.taglegend i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+/* etiquetas coloridas: cada seção do mercado tem a sua cor, no texto e no contorno */
+.tag[class*="sec-"] { font-weight: 700; background: #fff; }
+.tag.sec-0 { color: #8A6A24; border-color: #D9C48F; }   /* Mercearia */
+.tag.sec-1 { color: #2F7A45; border-color: #A9D2B4; }   /* Hortifruti */
+.tag.sec-2 { color: #2E6F94; border-color: #A6CBE0; }   /* Frios e laticínios */
+.tag.sec-3 { color: #A33D3D; border-color: #E3B0B0; }   /* Açougue e peixaria */
+.tag.sec-4 { color: #A8601F; border-color: #E6C19C; }   /* Padaria */
+.tag.sec-5 { color: #6A55A8; border-color: #C9BEE6; }   /* Bebidas */
+.tag.sec-6 { color: #1F8585; border-color: #A3D6D6; }   /* Congelados */
+.tag.sec-7 { color: #55606A; border-color: #C3CAD0; }   /* Casa e descartáveis */
+.tag.t-when { color: var(--ink); border-style: dashed; }
+.tag.t-frz { color: #1F8585; border-color: #A3D6D6; border-style: dashed; }
+.tag.t-store { color: #8E4A62; border-color: #DDB8C6; }
+.tag.t-act { color: #6A55A8; border-color: #C9BEE6; }
+.tag.t-rec { color: var(--ok); border-color: #B5D3C3; }
