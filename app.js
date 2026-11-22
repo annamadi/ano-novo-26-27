@@ -13,7 +13,7 @@
   const VEG = "Opção vegetariana";
   const CAL_KIND = { "Acompanhamento": "side", "Opção vegetariana": "veg", "Sobremesa": "sweet" };
   const SIDE = "Acompanhamento";   // entra por dia, junto do prato principal
-  const BLOCKS = ["Jantar", SIDE, VEG, "Café da manhã", "Snacks", "Sobremesa", "Bebidas", "Casa"];
+  const BLOCKS = ["Jantar", VEG, SIDE, "Café da manhã", "Snacks", "Sobremesa", "Bebidas", "Casa"];
   const FOOD = BLOCKS.filter(b => b !== "Casa");
   const WHEN = ["Black Friday (27/11)", "Antes da viagem", "Lá, durante a semana", "A definir"];
   // nomes antigos, para os dados que ainda não foram renomeados no banco
@@ -526,7 +526,7 @@
           <span class="calfoot">${d.people} pessoas${d.veg_guest ? (st => `<span class="vflag ${st}">${LEAF}${st === "ok" ? "vegetariana ok" : st === "pend" ? "vegetariana a conferir" : "falta vegetariana"}</span>`)(dayVegState(d)) : ""}</span>
         </button>`;
       }).join("")}</div></div>${MORE}</div>
-      <p class="callegend" aria-hidden="true"><span class="k-side">Acompanhamento</span><span class="k-veg">Opção vegetariana</span><span class="k-sweet">Sobremesa</span></p>
+      <p class="callegend" aria-hidden="true"><span class="k-veg">Opção vegetariana</span><span class="k-side">Acompanhamento</span><span class="k-sweet">Sobremesa</span></p>
       <p class="hint">Toque num dia para abrir e editar. A faixa verde no topo marca os dias que precisam de opção vegetariana.</p>`;
     return `<p class="lead">Toque num dia para trocar o prato. A lista de compras se refaz sozinha com o que estiver aqui.</p>
     <div class="seg" role="group" aria-label="Visualização">
