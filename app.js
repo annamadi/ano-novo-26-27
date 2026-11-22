@@ -605,9 +605,9 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${flat !== true && !ui.open.has("add-" + r.id) ? "" : `<form class="additem" data-form="add-item" data-id="${r.id}">
         <input name="name" placeholder="${flat === true ? "Item" : "Ingrediente"}" list="dl-ings" required data-act="ing-hint">
         <input name="qty" placeholder="Qtd" inputmode="decimal">
-        <input name="unit" placeholder="${flat === true ? "un, g, lata…" : "g, xícara…"}" list="dl-units" autocapitalize="none">
+        <input name="unit" placeholder="${flat === true ? "un, g, lata…" : "g, xícara…"}" autocapitalize="none">
         <button class="btn">Adicionar</button>
-        ${flat === true ? "" : `<datalist id="dl-units"><option value="g"><option value="ml"><option value="un"><option value="xícara"><option value="colher de sopa"></datalist><p class="hint">Na unidade, pode escrever xícara ou colher de sopa: farinha, açúcar, manteiga, leite e parecidos são convertidos para g ou ml.</p>`}
+        ${flat === true ? "" : `<div class="upick" role="group" aria-label="Unidade">${["g", "ml", "un", "xícara", "colher de sopa"].map(x => `<button type="button" class="tagbtn" data-act="unit-pick" data-v="${x}">${x}</button>`).join("")}</div><p class="hint">Xícara e colher de sopa de farinha, açúcar, manteiga, leite e parecidos são convertidas para g ou ml.</p>`}
       </form>`}
       ${flat === true ? gtools("r-" + r.id, "Definir responsável pelos itens") : ""}
       </section>
@@ -1028,6 +1028,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "back") { ui.back = null; go("menu"); }
     else if (act === "open-recipe") { ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.rec = el.dataset.id; render(true); window.scrollTo(0, 0); }
+    else if (act === "unit-pick") { const u = el.closest("form").querySelector('[name="unit"]'); u.value = el.dataset.v; u.dataset.auto = ""; el.parentNode.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b === el)); }
     else if (act === "scroll-right" || act === "scroll-left") { const sc = el.parentNode.firstElementChild; sc.scrollBy({ left: sc.clientWidth * 0.8 * (act === "scroll-left" ? -1 : 1), behavior: "smooth" }); }
     else if (act === "rec-open") { ui.rec = el.dataset.id; ui.back = null; render(true); window.scrollTo(0, 0); }
     else if (act === "rec-close") { ui.rec = null; render(true); }
