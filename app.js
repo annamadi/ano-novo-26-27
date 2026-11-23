@@ -5,9 +5,9 @@
   let who = "";
   const TABLES = ["ingredients", "recipes", "recipe_items", "days", "menu", "pendencias", "extras", "people", "activities", "trash", "comments", "private"];
   const OPTIONAL = new Set(["people", "activities", "trash", "comments", "private"]);
-  const TABS = ["start", "menu", "recipes", "home", "fun", "shop", "take", "mine", "pend", "cfg", "help"];
-  const SEC = { start: "inicio", menu: "plano", recipes: "plano", home: "plano", fun: "plano", shop: "compras", take: "levar", mine: "minha", pend: "pend", cfg: "cfg", help: "cfg" };
-  const TITLE = { start: "Início", menu: "Cardápio", recipes: "Receitas", home: "Casa", fun: "Entretenimento", shop: "Compras", take: "Levar", mine: "Minha lista", pend: "Pendências", cfg: "Ajustes", help: "Como funciona" };
+  const TABS = ["start", "menu", "recipes", "home", "fun", "shop", "take", "mine", "pend", "cfg", "help", "log"];
+  const SEC = { start: "inicio", menu: "plano", recipes: "plano", home: "plano", fun: "plano", shop: "compras", take: "levar", mine: "minha", pend: "pend", cfg: "cfg", help: "cfg", log: "cfg" };
+  const TITLE = { start: "Início", menu: "Cardápio", recipes: "Receitas", home: "Casa", fun: "Entretenimento", shop: "Compras", take: "Levar", mine: "Minha lista", pend: "Pendências", cfg: "Ajustes", help: "Como funciona", log: "Histórico" };
   const PREFIX = "an_";
   const LS_KEY = "ano-novo-2627";
   const VEG = "Opção vegetariana";
@@ -317,8 +317,8 @@
     document.querySelectorAll("#sub button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
     const y = window.scrollY, shOld = view.querySelector(".sheet"), shY = shOld ? shOld.scrollTop : 0;
     revMap = unreviewed(); bulk.clear();
-    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado: rode, em ordem, os arquivos supabase/migration-02.sql a migration-10.sql que ainda não rodou.</p>` : "") +
-      ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine, help: vHelp }[ui.tab])();
+    view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado: rode, em ordem, os arquivos supabase/migration-02.sql a migration-11.sql que ainda não rodou.</p>` : "") +
+      ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine, help: vHelp, log: vLog }[ui.tab])();
     window.scrollTo(0, y);
     const shNew = view.querySelector(".sheet"); if (shNew) shNew.scrollTop = shY;
     document.body.classList.toggle("locked", !!shNew);
@@ -363,6 +363,7 @@
     if (t === "take") { const l = takeEntries(tot), d = c(l, isDone); return { d, n: l.length, text: `${d} de ${l.length} itens separados.` }; }
     if (t === "mine") { const me = meName(), l = [...buyEntries(tot), ...takeEntries(tot)].filter(en => isMine(en.r.owner, me)), d = c(l, isDone); return { d, n: l.length, text: me ? `${d} de ${l.length} itens de ${me} resolvidos.` : "Cadastre as pessoas do grupo." }; }
     if (t === "cfg") return { d: 0, n: 0, text: "Pessoas do grupo, cópia de segurança, lixeira e saída." };
+    if (t === "log") return { d: 0, n: 0, text: "Quem mudou o quê, do mais recente ao mais antigo." };
     if (t === "help") return { d: 0, n: 0, text: "O que fazer aqui e o que cada sinal quer dizer." };
     if (t === "pend") { const d = c(S.pendencias, p => p.done); return { d, n: S.pendencias.length, text: `${d} de ${S.pendencias.length} pendências resolvidas.` }; }
     if (t === "recipes") { const l = S.recipes.filter(r => recipeCount(r) && r.block !== "Casa"), d = c(l, isRev); return { d, n: l.length, text: `${d} de ${l.length} receitas do cardápio conferidas.` }; }
@@ -1012,6 +1013,78 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       render(true); toast(`Cópia restaurada: ${n} registros.`);
     } catch (e) { console.error(e); bk.busy = false; render(true); toast(`A restauração parou: ${e.message}. Nada foi apagado; tente de novo.`); }
   }
+  // histórico de alterações: quem grava é o banco (migration-11); o site só lê, quando a tela abre
+  const LOG_F = { name: "nome", unit: "unidade", sector: "seção", when_buy: "momento da compra", buy_hint: "dica de compra", bought: "comprado", from_home: "leva de casa", owner: "responsável", note: "observação", store: "loja", paid: "valor pago", bought_by: "quem pagou", hint_qty: "quantidade de compra", can_freeze: "pode congelar", bf: "Black Friday", at_house: "já tem na casa",
+    block: "tipo", serves: "serve", weekly: "semana toda", notes: "notas", prep: "modo de preparo", reviewed: "conferida", reviewed_by: "conferida por", brought: "levada pronta", brought_done: "separada", qty: "quantidade", suggested: "sugestão da IA", veg: "vegetariano", checked_by: "conferido por", kind: "grupo",
+    date: "data", people: "pessoas", veg_guest: "tem vegetariano", breakfast: "café da manhã", veg_option: "opção vegetariana", subject: "assunto", detail: "texto", answer: "resposta", done: "resolvido", recipe_id: "receita", ingredient_id: "ingrediente", day_id: "dia", pend_id: "pendência", activity_id: "atividade", grp: "lista", item: "item", buy: "precisa comprar", body: "texto", author: "autor" };
+  const LOG_REF = { recipe_id: "recipes", ingredient_id: "ingredients", activity_id: "activities", pend_id: "pendencias", day_id: "days" };
+  const LOG_T = [["recipes", "Receitas"], ["recipe_items", "Ingredientes das receitas"], ["ingredients", "Compras"], ["menu", "Cardápio"], ["days", "Dias"], ["pendencias", "Pendências"], ["comments", "Comentários"], ["extras", "Levar e atividades"], ["activities", "Atividades"], ["people", "Pessoas"]];
+  const LOG_N = 150;
+  const cut = (v, n) => { const t = String(v ?? "").replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
+  const logDay = v => { const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(String(v || "")); return m ? `${Number(m[3])}/${m[2]}` : String(v || ""); };
+  const logWho = w => peopleNames().find(n => norm(n) === norm(w)) || (w === "sistema" ? "Ajuste direto no banco" : w || "Alguém");
+  function logVal(k, v) {
+    if (v === null || v === undefined || v === "") return "vazio";
+    if (typeof v === "boolean") return v ? "sim" : "não";
+    if (LOG_REF[k]) { const r = get(LOG_REF[k], v); return r ? cut(r.name || r.subject || logDay(r.date), 40) : "outro"; }
+    if (k === "date") return logDay(v);
+    if (typeof v === "number") return String(v).replace(".", ",");
+    return cut(v, 60);
+  }
+  function logText(x) {
+    const d = x.diff || {}, keys = Object.keys(d), L = `<b>${esc(cut(x.label || "sem nome", 70))}</b>`;
+    const C = esc(x.tbl === "menu" ? logDay(x.ctx) : cut(x.ctx, 50));
+    const det = () => keys.map(k => { const [a, b] = Array.isArray(d[k]) ? d[k] : [null, d[k]], long = [a, b].some(v => typeof v === "string" && v.length > 60); return long ? `${LOG_F[k] || k}: texto alterado` : `${LOG_F[k] || k}: ${logVal(k, a)} → ${logVal(k, b)}`; }).map(esc).join("<br>");
+    if (x.tbl === "menu") return [x.op === "D" ? `tirou ${L} do dia ${C}` : x.op === "I" ? `pôs ${L} no dia ${C}` : `trocou o prato do dia ${C} para ${L}`, ""];
+    if (x.tbl === "recipe_items") {
+      const R = C || "uma receita";
+      if (x.op === "I") return [`adicionou ${L} em ${R}`, d.qty ? esc(`quantidade: ${logVal("qty", d.qty)}`) : ""];
+      if (x.op === "D") return [`tirou ${L} de ${R}`, ""];
+      if (keys.length === 1 && keys[0] === "checked_by") { const [a, b] = d.checked_by; return [`${String(b || "").length > String(a || "").length ? "conferiu" : "tirou a conferência de"} ${L} em ${R}`, ""]; }
+      return [`alterou ${L} em ${R}`, det()];
+    }
+    const thing = { recipes: "a receita ", ingredients: "o ingrediente ", days: "o dia ", pendencias: "a pendência ", comments: "o comentário ", people: "a pessoa ", activities: "a atividade ", extras: "o item " }[x.tbl] || "";
+    const name = x.tbl === "days" ? `<b>${esc(logDay(x.label))}</b>` : L;
+    const where = !C ? "" : x.tbl === "comments" ? ` na pendência ${C}` : x.tbl === "pendencias" || x.tbl === "extras" ? ` (${C})` : "";
+    const obj = thing + name + where;
+    if (x.op === "I") return [`criou ${obj}`, ""];
+    if (x.op === "D") return [`apagou ${obj}`, ""];
+    const k = keys[0];
+    if (keys.length === 1 && ["bought", "done", "brought_done"].includes(k) && Array.isArray(d[k]) && typeof d[k][1] === "boolean") return [`${d[k][1] ? (k === "bought" ? "marcou como comprado" : k === "brought_done" ? "marcou como separada" : "marcou como resolvido") : "desmarcou"} ${obj}`, ""];
+    return [`alterou ${obj}`, det()];
+  }
+  async function loadLog(more) {
+    const L = ui.log || (ui.log = { rows: [] });
+    if (L.busy || !client) return;
+    L.busy = true;
+    let q = client.from(PREFIX + "log").select("*").order("id", { ascending: false }).limit(LOG_N);
+    if (more && L.rows.length) q = q.lt("id", L.rows[L.rows.length - 1].id);
+    let res; try { res = await q; } catch (e) { res = { error: e }; }
+    L.busy = false; L.ready = true;
+    if (res.error) L.err = /an_log|schema cache|does not exist|PGRST205|42P01/.test(`${res.error.code || ""} ${res.error.message || ""}`) ? "setup" : "net";
+    else { L.err = null; L.rows = more ? L.rows.concat(res.data) : res.data; L.more = res.data.length === LOG_N; }
+    if (ui.log === L && ui.tab === "log") render(true);
+  }
+  function vLog() {
+    const back = `<button class="backlink" data-go="cfg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Ajustes</button>`;
+    const L = ui.log;
+    if (!client && !(L && L.ready)) return `${back}<p class="empty">O histórico só existe com o banco ligado.</p>`;
+    if (!L || !L.ready) { if (!L || !L.busy) loadLog(); return `${back}<p class="empty">Carregando o histórico…</p>`; }
+    if (L.err === "setup") return `${back}<p class="warn">O histórico começa a ser gravado depois que o arquivo supabase/migration-11.sql rodar no banco. O que mudou antes disso não aparece.</p>`;
+    if (L.err) return `${back}<p class="empty">Não foi possível carregar o histórico. Confira a internet e abra a tela de novo.</p>`;
+    const whos = [...new Set(L.rows.map(x => x.who))].map(w => [w, logWho(w)]).sort((a, b) => a[1].localeCompare(b[1], "pt"));
+    const rows = L.rows.filter(x => (!ui.lWho || x.who === ui.lWho) && (!ui.lTbl || x.tbl === ui.lTbl));
+    const today = new Date().toLocaleDateString("sv"), yest = new Date(Date.now() - 864e5).toLocaleDateString("sv");
+    const groups = new Map();
+    rows.forEach(x => { const dt = new Date(x.at), k = dt.toLocaleDateString("sv"); if (!groups.has(k)) groups.set(k, []); groups.get(k).push([x, dt]); });
+    const dayName = k => k === today ? "Hoje" : k === yest ? "Ontem" : new Date(k + "T12:00").toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase());
+    return `${back}
+    <div class="frow logf">${pill("lWho", "Quem", whos)}${pill("lTbl", "O quê", LOG_T.filter(([t]) => L.rows.some(x => x.tbl === t)))}</div>
+    ${rows.length ? [...groups].map(([k, l]) => `<h2>${esc(dayName(k))} <small>${l.length}</small></h2>
+    <ul class="loglist">${l.map(([x, dt]) => { const [txt, det] = logText(x); return `<li><time datetime="${esc(x.at)}">${dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</time><p><strong>${esc(logWho(x.who))}</strong> ${txt}${det ? `<small>${det}</small>` : ""}</p></li>`; }).join("")}</ul>`).join("")
+      : `<p class="empty">${L.rows.length ? "Nenhuma alteração com esses filtros." : "Nenhuma alteração registrada ainda."}</p>`}
+    ${L.more ? `<p class="helplink"><button class="btn" data-act="log-more" ${L.busy ? "disabled" : ""}>Ver alterações mais antigas</button></p>` : ""}`;
+  }
   // instalar como app: no Android o Chrome entrega o evento e o botão abre a instalação; no iPhone só dá para explicar o caminho
   let installEvt = null;
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; if (ui.tab === "help" || ui.tab === "start") render(); });
@@ -1065,6 +1138,8 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       <div class="itools"><button class="btn sm" data-act="open" data-key="newperson" aria-expanded="${addP}">${addP ? "Fechar" : "+ Pessoa"}</button></div>
       ${addP ? `<form class="newrow one" data-form="add-person"><input name="name" placeholder="Nome da pessoa" required><button class="btn">Adicionar</button></form>` : ""}`;
     return `${people}
+    <h2>Histórico</h2>
+    <div class="actlist"><button class="actrow" data-go="log"><span><b>Histórico de alterações</b><small>Quem criou, mudou ou apagou cada coisa, e quando.</small></span>${CH}</button></div>
     <h2>Cópia e exportação</h2>
     <div class="actlist">
       <button class="actrow" data-act="backup"><span><b>Baixar cópia de segurança</b><small>Guarda tudo num arquivo, menos as listas particulares.</small></span>${CH}</button>
@@ -1381,6 +1456,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(`Lista copiada: ${todo2.length} ${todo2.length === 1 ? "item" : "itens"}${rid ? "" : " que faltam"}.`), () => toast("Não foi possível copiar neste navegador."));
     }
     else if (act === "backup") downloadBackup();
+    else if (act === "log-more") loadLog(true);
     else if (act === "install") { const ev = installEvt; if (ev) { installEvt = null; ev.prompt(); ev.userChoice.then(() => render(), () => render()); } }
     else if (act === "how-install") { go("help"); requestAnimationFrame(() => { const h = view.querySelector(".howinst, [data-act=install]"); if (h) h.scrollIntoView({ block: "center" }); }); }
     else if (act === "bk-cancel") { ui.bk = null; render(true); }
@@ -1485,6 +1561,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     noDraft = true;
     if (t === "plano") t = localStorage.getItem("an-plano") || "menu";
     if (!TABS.includes(t)) t = "start";
+    if (t === "log") ui.log = null;   // relê o histórico a cada visita
     ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null; ui.sheet = null; ui.fsheet = false; ui.rec = null; ui.open.delete("acct");
     [...ui.open].filter(k => /^(q-|ep-|ec-|lk-|bulk-|add-|new)/.test(k)).forEach(k => ui.open.delete(k));
     [...ui.open].filter(k => /^(cm-|x-|ed-|ai-)/.test(k)).forEach(k => ui.open.delete(k));
