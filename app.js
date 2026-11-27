@@ -330,7 +330,7 @@
     const hs = ui.tab === "start" ? null : headStat(shopping());
     $("#mini").innerHTML = ui.tab === "start" ? `<strong>Ano Novo 26/27</strong>${FINDBTN}` : hs ? `<button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button><strong>${TITLE[ui.tab]}</strong>${hs.n ? `<span>${hs.d} de ${hs.n}</span>` : ""}<i style="width:${hs.n ? Math.round(100 * hs.d / hs.n) : 0}%"></i>${FINDBTN}` : "";
     onScroll();
-    if (ui.tab === "shop" && ui.q) filterShop();
+    if (ui.tab === "shop" && ui.q) { filterShop(); window.scrollTo(0, y); }   // a busca muda a altura da lista: repõe a rolagem depois dela
     if (ui.tab === "recipes" && ui.rq) filterRecipes();
     syncHistory();
   }
@@ -1071,11 +1071,12 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   // busca geral e menu: uma lupa em todas as telas. Sem texto, mostra para onde ir; com texto, procura em tudo
   const FINDBTN = `<button class="findbtn" data-act="find" data-v="1" aria-label="Buscar e ir para outra tela"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20 20"/></svg></button>`;
   const FIND_MAX = 8;
-  function flashRow(name) {
+  function flashRow(name, again) {
     requestAnimationFrame(() => {
       const all = [...view.querySelectorAll("li[data-name]")], li = all.find(l => l.dataset.name === name) || all.find(l => l.dataset.name.includes(name));
       if (!li) return;
-      const ul = li.closest("ul"); if (ul && ul.hidden) ul.hidden = false;
+      // grupo recolhido: abre de verdade (pelo botão), senão ele fecha de novo no próximo redesenho da tela
+      const ul = li.closest("ul"); if (ul && ul.hidden) { const b = !again && ul.closest("section") && ul.closest("section").querySelector(".grp-h button"); if (b) { b.click(); return flashRow(name, true); } ul.hidden = false; }
       li.scrollIntoView({ block: "center" }); li.classList.add("flash"); setTimeout(() => li.classList.remove("flash"), 2200);
     });
   }
