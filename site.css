@@ -899,3 +899,7 @@ li.flash { animation: row-flash 2.2s ease-out; }
 .rb-h button:active { background: var(--mist); }
 .rblock[data-closed="1"] > .recipe { display: none; }
 #view .rblock[data-closed="1"] > h2.rb-h { border-bottom-color: var(--line); }
+
+/* Cardápio: títulos das categorias em destaque, no mesmo desenho dos tipos de receita */
+#view h2.mcat { margin: 28px 0 6px; padding-bottom: 10px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font: 600 1.6rem/1.15 var(--display); letter-spacing: -.01em; border-bottom: 2px solid var(--ink); }
+#view h2.mcat small { font: 700 .82rem var(--body); }
