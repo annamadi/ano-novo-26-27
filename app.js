@@ -621,7 +621,8 @@
         <button class="btn primary">Criar com estes ingredientes</button></form></div>` : ""}
     ${foodBlocks().map(b => {
       const rs = S.recipes.filter(r => r.block === b && pass(r)).sort(byPos);
-      return rs.length ? `<section class="rblock"><h2>${esc(b)} <small>${rs.length}</small></h2>${rs.map(r => vRecipe(r)).join("")}</section>` : "";
+      const closed = ui.open.has("rb-" + b);
+      return rs.length ? `<section class="rblock" data-c="${closed ? 1 : 0}" data-closed="${closed ? 1 : 0}"><h2 class="rb-h"><button class="chev" data-act="open" data-key="rb-${esc(b)}" aria-expanded="${!closed}"><span>${esc(b)}</span><small>${rs.length}</small></button></h2>${rs.map(r => vRecipe(r)).join("")}</section>` : "";
     }).join("") || `<p class="empty">Nenhuma receita com esses filtros.</p>`}`;
   }
   function filterRecipes() {
@@ -630,6 +631,7 @@
       let hit = 0;
       sec.querySelectorAll(":scope > .recipe").forEach(a => { a.hidden = !!k && !a.dataset.name.includes(k); if (!a.hidden) hit++; });
       sec.hidden = !hit;
+      sec.dataset.closed = k ? "0" : sec.dataset.c;   // buscando, os tipos recolhidos abrem para mostrar o que achou
     });
   }
   // tipo do ingrediente dentro da receita, só para ordenar e separar a lista na conferência
@@ -1537,7 +1539,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       const k = el.dataset.k, v = el.dataset.v || "";
       const clearShop = () => { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ui.fNoQty = ""; ui.q = ""; };
       if (k === "sector") { clearShop(); ui.fSector = v; go("shop"); }
-      else if (k === "block") { ui.rq = ui.rIn = ui.rRev = ""; ui.rBlock = v; go("recipes"); }
+      else if (k === "block") { ui.rq = ui.rIn = ui.rRev = ""; ui.rBlock = v; ui.open.delete("rb-" + v); go("recipes"); }
       else if (k === "item") { clearShop(); ui.tWho = ui.tStatus = ""; go(el.dataset.tab); flashRow(v); }
       else if (k === "pend") { ui.pStatus = ""; ui.pRec = ""; ui.pMe = false; go("pend"); const q = document.getElementById("pend-q"); if (q) { q.value = v; q.dispatchEvent(new Event("input", { bubbles: true })); } }
     }

@@ -890,3 +890,12 @@ li.flash { animation: row-flash 2.2s ease-out; }
 @keyframes row-flash { 0%, 55% { background: var(--warn-bg); } 100% { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { li.flash { animation: none; outline: 2px solid var(--gold); } }
 @media (min-width: 900px) { .findnav { grid-template-columns: repeat(4, 1fr); } }
+
+/* Receitas: tipos em destaque e recolhíveis */
+#view .rblock > h2.rb-h { margin: 22px 0 4px; font: inherit; border-bottom: 2px solid var(--ink); }
+.rb-h button { width: 100%; min-height: 54px; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: var(--ink); }
+.rb-h button > span { font: 600 1.6rem/1.15 var(--display); letter-spacing: -.01em; }
+#view .rb-h button > small { font: 700 .82rem var(--body); color: var(--gold-deep); background: var(--mist); border-radius: 99px; padding: 2px 9px; margin-right: auto; }
+.rb-h button:active { background: var(--mist); }
+.rblock[data-closed="1"] > .recipe { display: none; }
+#view .rblock[data-closed="1"] > h2.rb-h { border-bottom-color: var(--line); }
