@@ -318,7 +318,7 @@
     const y = window.scrollY, shOld = view.querySelector(".sheet"), shY = shOld ? shOld.scrollTop : 0;
     revMap = unreviewed(); bulk.clear();
     view.innerHTML = (needsSetup ? `<p class="warn">Parte das novidades só salva depois que o banco for atualizado: rode, em ordem, os arquivos supabase/migration-02.sql a migration-11.sql que ainda não rodou.</p>` : "") +
-      ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine, help: vHelp, log: vLog }[ui.tab])();
+      ({ cfg: vCfg, start: vStart, menu: vMenu, recipes: vRecipes, home: vHome, shop: vShop, take: vTake, fun: vFun, pend: vPend, mine: vMine, help: vHelp, log: vLog }[ui.tab])() + (ui.find ? findSheet() : "");
     window.scrollTo(0, y);
     const shNew = view.querySelector(".sheet"); if (shNew) shNew.scrollTop = shY;
     document.body.classList.toggle("locked", !!shNew);
@@ -327,14 +327,14 @@
     view.querySelectorAll("input[placeholder]:not([aria-label])").forEach(i => { if (!i.closest("label")) i.setAttribute("aria-label", i.placeholder); });
     $("#top").innerHTML = ui.tab === "start" ? "" : header();
     const hs = ui.tab === "start" ? null : headStat(shopping());
-    $("#mini").innerHTML = ui.tab === "start" ? `<strong>Ano Novo 26/27</strong>` : hs ? `<button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button><strong>${TITLE[ui.tab]}</strong>${hs.n ? `<span>${hs.d} de ${hs.n}</span>` : ""}<i style="width:${hs.n ? Math.round(100 * hs.d / hs.n) : 0}%"></i>` : "";
+    $("#mini").innerHTML = ui.tab === "start" ? `<strong>Ano Novo 26/27</strong>${FINDBTN}` : hs ? `<button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button><strong>${TITLE[ui.tab]}</strong>${hs.n ? `<span>${hs.d} de ${hs.n}</span>` : ""}<i style="width:${hs.n ? Math.round(100 * hs.d / hs.n) : 0}%"></i>${FINDBTN}` : "";
     onScroll();
     if (ui.tab === "shop" && ui.q) filterShop();
     if (ui.tab === "recipes" && ui.rq) filterRecipes();
     syncHistory();
   }
   // Botão "voltar" do celular: cada troca de tela (aba, receita aberta, janela do dia ou de filtros) vira um passo no histórico
-  const navSnap = () => JSON.stringify({ t: ui.tab, r: ui.rec || null, s: ui.sheet || null, f: !!ui.fsheet, b: ui.back || null });
+  const navSnap = () => JSON.stringify({ t: ui.tab, r: ui.rec || null, s: ui.sheet || null, f: !!ui.fsheet, b: ui.back || null, q: !!ui.find });
   let navCur = null, navY = 0;
   function syncHistory() {
     const s = navSnap();
@@ -350,7 +350,7 @@
     const st = e.state; if (!st || !st.nav) return;
     let o; try { o = JSON.parse(st.nav); } catch { return; }
     if (!TABS.includes(o.t)) return;
-    ui.tab = o.t; ui.rec = o.r && get("recipes", o.r) ? o.r : null; ui.sheet = o.s && get("days", o.s) ? o.s : null; ui.fsheet = !!o.f; ui.back = o.b || null;
+    ui.tab = o.t; ui.rec = o.r && get("recipes", o.r) ? o.r : null; ui.sheet = o.s && get("days", o.s) ? o.s : null; ui.fsheet = !!o.f; ui.back = o.b || null; ui.find = !!o.q;
     ui.open.delete("acct"); localStorage.setItem("an-tab", ui.tab);
     navCur = navSnap(); noDraft = true;
     render(true);
@@ -388,7 +388,7 @@
   function header() {
     const st = headStat(shopping()), pct = st.n ? Math.round(100 * st.d / st.n) : 0, C = 2 * Math.PI * 19;
     return `<div class="top-in">
-      <div class="top-row"><button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button><span class="brand">Ano Novo 26/27</span>${acct()}</div>
+      <div class="top-row"><button class="link home" data-go="start" aria-label="Ir para o início"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20h-5v-5H9v5H4z"/></svg></button><span class="brand">Ano Novo 26/27</span><span class="tr-r">${FINDBTN}${acct()}</span></div>
       <div class="top-main"><div class="top-t"><h1>${TITLE[ui.tab]}</h1>
         <p class="status" aria-live="polite">${st.n && /^\d+ de \d+ /.test(st.text) ? `<b>${st.d}</b> de ${st.n} ${esc(st.text.replace(/^\d+ de \d+ /, "").replace(/\.$/, ""))}` : esc(st.text.replace(/\.$/, ""))}</p></div>
         ${st.n ? `<svg class="ring" viewBox="0 0 48 48" role="img" aria-label="${pct}% concluído"><circle cx="24" cy="24" r="19"/>${pct ? `<circle class="on" cx="24" cy="24" r="19" stroke-dasharray="${(C * pct / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 24 24)"/>` : ""}<text x="24" y="28.5" text-anchor="middle">${pct}%</text></svg>` : ""}</div>
@@ -1013,6 +1013,50 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       render(true); toast(`Cópia restaurada: ${n} registros.`);
     } catch (e) { console.error(e); bk.busy = false; render(true); toast(`A restauração parou: ${e.message}. Nada foi apagado; tente de novo.`); }
   }
+  // busca geral e menu: uma lupa em todas as telas. Sem texto, mostra para onde ir; com texto, procura em tudo
+  const FINDBTN = `<button class="findbtn" data-act="find" data-v="1" aria-label="Buscar e ir para outra tela"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20 20"/></svg></button>`;
+  const FIND_MAX = 8;
+  function flashRow(name) {
+    requestAnimationFrame(() => {
+      const all = [...view.querySelectorAll("li[data-name]")], li = all.find(l => l.dataset.name === name) || all.find(l => l.dataset.name.includes(name));
+      if (!li) return;
+      const ul = li.closest("ul"); if (ul && ul.hidden) ul.hidden = false;
+      li.scrollIntoView({ block: "center" }); li.classList.add("flash"); setTimeout(() => li.classList.remove("flash"), 2200);
+    });
+  }
+  function findOut() {
+    const k = norm(ui.fq || ""), tot = shopping();
+    if (!k) {
+      const buy = buyEntries(tot), secs = SECTORS.map(x => [x, buy.filter(en => keyOf(en, "sector") === x).length]).filter(([, n]) => n);
+      const blocks = BLOCKS.filter(b => b !== "Casa").map(b => [b, S.recipes.filter(r => r.block === b).length]).filter(([, n]) => n);
+      return `<h3>Ir para</h3>
+      <div class="findnav">${["start", "menu", "recipes", "home", "fun", "shop", "take", "mine", "pend", "cfg", "log", "help"].map(t => `<button data-go="${t}" ${ui.tab === t ? 'aria-current="page"' : ""}>${TITLE[t]}</button>`).join("")}</div>
+      ${secs.length ? `<h3>Compras por seção</h3><div class="findchips">${secs.map(([x, n]) => `<button data-act="find-go" data-k="sector" data-v="${esc(x)}">${esc(x)}<small>${n}</small></button>`).join("")}</div>` : ""}
+      ${blocks.length ? `<h3>Receitas por tipo</h3><div class="findchips">${blocks.map(([b, n]) => `<button data-act="find-go" data-k="block" data-v="${esc(b)}">${esc(b)}<small>${n}</small></button>`).join("")}</div>` : ""}`;
+    }
+    const hit = n => norm(n).includes(k), nameOf = en => en.k === "x" ? en.r.item : en.r.name;
+    const uses = id => [...new Set(S.recipe_items.filter(x => x.ingredient_id === id).map(x => get("recipes", x.recipe_id)).filter(r => r && recipeCount(r)).map(r => r.name))];
+    const itemRow = tab => en => { const u = en.k === "i" ? uses(en.r.id) : [], info = [en.k === "r" ? "receita levada pronta" : keyOf(en, "sector"), en.r.owner || "sem responsável", u.length ? "em " + u.slice(0, 3).join(", ") + (u.length > 3 ? " e mais " + (u.length - 3) : "") : ""].filter(Boolean).join(", ");
+      return `<li><button class="rowlink" data-act="find-go" data-k="item" data-tab="${tab}" data-v="${esc(norm(nameOf(en)))}">${esc(nameOf(en))}<small>${esc(info)}</small></button></li>`; };
+    const grp = (title, list, row) => list.length ? `<h3>${title} <small>${list.length}</small></h3><ul class="plain">${list.slice(0, FIND_MAX).map(row).join("")}</ul>${list.length > FIND_MAX ? `<p class="hint">E mais ${list.length - FIND_MAX}. Escreva mais letras para afinar.</p>` : ""}` : "";
+    const byName = (a, b) => nameOf(a).localeCompare(nameOf(b), "pt");
+    const out = [
+      grp("Receitas", S.recipes.filter(r => hit(r.name)).sort((a, b) => a.name.localeCompare(b.name, "pt")), r => `<li><button class="rowlink" data-act="open-recipe" data-id="${r.id}">${esc(r.name)}<small>${esc(r.block === "Casa" ? "lista da casa" : r.block + (recipeCount(r) ? "" : ", fora do cardápio"))}</small></button></li>`),
+      grp("Compras", buyEntries(tot).filter(en => hit(nameOf(en))).sort(byName), itemRow("shop")),
+      grp("Levar", takeEntries(tot).filter(en => hit(nameOf(en))).sort(byName), itemRow("take")),
+      grp("Já tem na casa", S.ingredients.filter(i => tot.has(i.id) && isAtHouse(i) && hit(i.name)).map(r => ({ k: "i", r })).sort(byName), itemRow("home")),
+      grp("Pendências", S.pendencias.filter(p => hit(p.subject) || hit(p.detail)), p => `<li><button class="rowlink" data-act="find-go" data-k="pend" data-v="${esc(cut(p.subject || p.detail, 40).replace(/…$/, ""))}">${esc(cut(p.subject || p.detail, 70))}<small>${p.done ? "resolvida" : "em aberto"}</small></button></li>`)
+    ].join("");
+    return out || `<p class="empty">Nada com esse nome.</p>`;
+  }
+  function findSheet() {
+    return `<div class="sheet-bg" data-act="find" data-v=""></div>
+    <section class="sheet find" role="dialog" aria-modal="true" aria-label="Buscar e ir para outra tela">
+      <header><h2>Buscar</h2><button class="btn" id="sheet-x" data-act="find" data-v="">Fechar</button></header>
+      <input type="search" id="find-q" placeholder="Item, receita ou pendência" value="${esc(ui.fq || "")}" aria-label="Buscar em todo o site" autocomplete="off" enterkeyhint="search">
+      <div id="find-out">${findOut()}</div>
+    </section>`;
+  }
   // histórico de alterações: quem grava é o banco (migration-11); o site só lê, quando a tela abre
   const LOG_F = { name: "nome", unit: "unidade", sector: "seção", when_buy: "momento da compra", buy_hint: "dica de compra", bought: "comprado", from_home: "leva de casa", owner: "responsável", note: "observação", store: "loja", paid: "valor pago", bought_by: "quem pagou", hint_qty: "quantidade de compra", can_freeze: "pode congelar", bf: "Black Friday", at_house: "já tem na casa",
     block: "tipo", serves: "serve", weekly: "semana toda", notes: "notas", prep: "modo de preparo", reviewed: "conferida", reviewed_by: "conferida por", brought: "levada pronta", brought_done: "separada", qty: "quantidade", suggested: "sugestão da IA", veg: "vegetariano", checked_by: "conferido por", kind: "grupo",
@@ -1125,6 +1169,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
       ${row(LEAF_H, "Ingrediente da alternativa vegetariana do prato.")}
       ${row(`<span class="vflag miss">${LEAF_H}falta vegetariana</span>`, "O dia tem alguém vegetariano e nenhum prato atende. Vira <q>a conferir</q> quando existe uma opção, e <q>ok</q> depois que ela é conferida.")}
       ${row(`<i class="qdot"></i>`, "Em Compras: a quantidade vem de uma receita que ainda não foi conferida e pode mudar.")}
+      ${row(`<svg class="shico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20 20"/></svg>`, "No alto de todas as telas: procura item, receita ou pendência pelo nome e leva a qualquer tela.")}
       ${row(`<b class="mention">@Nome</b>`, "Num comentário, escreva @ e o nome de alguém do grupo para avisar a pessoa.")}
     </dl>
     <p class="hint">Apagou algo sem querer? Fica 7 dias na lixeira, em Ajustes. Para qualquer outra dúvida, crie uma pendência.</p>
@@ -1185,7 +1230,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const tile = (tab, sec, title, big, small, sub, cls = "", alert = "") => `<button class="tile ${cls}" data-go="${tab}" data-sec="${sec}"><span class="tile-t">${title}</span><span class="tile-n">${big}<i>${small}</i></span><span class="tile-s">${sub}</span>${alert}${typeof small === "string" && small[0] === "/" && Number(small.slice(1)) ? `<span class="tile-bar" aria-hidden="true"><i style="width:${Math.round(100 * big / Number(small.slice(1)))}%"></i></span>` : ""}</button>`;
     const waves = [0, 1, 2, 3, 4, 5, 6].map(k => { const y = 10 + k * 12, a = k % 2 ? 7 : -7; return `<path d="M-20 ${y} C 60 ${y + a}, 140 ${y - a}, 220 ${y} S 380 ${y + a}, 460 ${y} S 620 ${y - a}, 700 ${y} S 860 ${y + a}, 940 ${y}"/>`; }).join("");
     return `<section class="hero">
-      <div class="top-row"><span class="hbrand"><b>Ano Novo 26/27</b><small>${days.length ? (f => `${f(days[0].date)} a ${f(days[days.length - 1].date)}`)(d => { const [, m, dd] = d.split("-").map(Number); return `${dd} de ${["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"][m - 1]}`; }) : ""}</small></span>${acct()}</div>
+      <div class="top-row"><span class="hbrand"><b>Ano Novo 26/27</b><small>${days.length ? (f => `${f(days[0].date)} a ${f(days[days.length - 1].date)}`)(d => { const [, m, dd] = d.split("-").map(Number); return `${dd} de ${["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"][m - 1]}`; }) : ""}</small></span><span class="tr-r">${FINDBTN}${acct()}</span></div>
       ${n === null ? "" : n > 0 ? `<p class="count"><b>${n}</b><span>${n === 1 ? "dia para" : "dias para"}<br>a viagem</span></p>` : `<p class="count"><b>Já</b><span>estamos<br>na viagem</span></p>`}
       <svg class="waves7" viewBox="0 0 900 96" preserveAspectRatio="none" aria-hidden="true">${waves}</svg>
     </section>
@@ -1355,6 +1400,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
   });
   view.addEventListener("input", e => {
     const el = e.target;
+    if (el.id === "find-q") { ui.fq = el.value; const o = document.getElementById("find-out"); if (o) o.innerHTML = findOut(); }
     if (el.id === "shop-q") { ui.q = el.value; filterShop(); }
     if (el.id === "rec-q") { ui.rq = el.value; filterRecipes(); }
     if (el.id === "pend-q") { const k = norm(el.value); view.querySelectorAll(".pgrp").forEach(g => { let n = 0; g.querySelectorAll(":scope > .pend > li").forEach(li => { li.hidden = !!k && !li.dataset.txt.includes(k); n += !li.hidden; }); g.hidden = !n; }); }
@@ -1375,7 +1421,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const b = view.querySelector(`[data-act="sheet-day"][data-id="${id}"]`); if (b) b.focus();   // devolve o foco ao dia de origem
   }
   document.addEventListener("click", e => { if (ui.open.has("acct") && !e.target.closest(".acctbox")) { ui.open.delete("acct"); render(true); } }, true);
-  document.addEventListener("keydown", e => { if (e.key !== "Escape" || sugFor) return; if (ui.open.has("acct")) { ui.open.delete("acct"); return render(true); } if (ui.sheet) closeSheet(); else if (ui.fsheet) { ui.fsheet = false; render(true); } });
+  document.addEventListener("keydown", e => { if (e.key !== "Escape" || sugFor) return; if (ui.open.has("acct")) { ui.open.delete("acct"); return render(true); } if (ui.find) { ui.find = false; render(true); } else if (ui.sheet) closeSheet(); else if (ui.fsheet) { ui.fsheet = false; render(true); } });
 
   // Sugestões próprias: o <datalist> do navegador não abre no Android.
   const SUG_UNITS = ["g", "kg", "ml", "L", "un", "xícara", "colher de sopa", "lata", "pacote", "maço", "garrafa", "caixa"];
@@ -1434,7 +1480,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     const act = el.dataset.act;
     if (act === "open") { const k = el.dataset.key; ui.open.has(k) ? ui.open.delete(k) : ui.open.add(k); render(true); }
     else if (act === "back") { ui.back = null; go("menu"); }
-    else if (act === "open-recipe") { [...ui.open].filter(k => /^(cm-|ep-|ec-|lk-|own-|x-|q-|bulk-)/.test(k)).forEach(k => ui.open.delete(k)); ui.sheet = null; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.rec = el.dataset.id; render(true); window.scrollTo(0, 0); }
+    else if (act === "open-recipe") { [...ui.open].filter(k => /^(cm-|ep-|ec-|lk-|own-|x-|q-|bulk-)/.test(k)).forEach(k => ui.open.delete(k)); ui.sheet = null; ui.find = false; ui.rq = ui.rBlock = ui.rIn = ui.rRev = ""; ui.back = ui.tab === "menu" ? el.dataset.id : null; ui.tab = (get("recipes", el.dataset.id) || {}).block === "Casa" ? "home" : "recipes"; ui.rec = el.dataset.id; render(true); window.scrollTo(0, 0); }
     else if (act === "scroll-right" || act === "scroll-left") { const sc = el.parentNode.firstElementChild; sc.scrollBy({ left: sc.clientWidth * 0.8 * (act === "scroll-left" ? -1 : 1), behavior: "smooth" }); }
     else if (act === "rec-open") { ui.rec = el.dataset.id; ui.back = null; render(true); window.scrollTo(0, 0); }
     else if (act === "rec-close") { ui.rec = null; render(true); }
@@ -1486,6 +1532,15 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     else if (act === "clear-rec") { ui.rBlock = ui.rIn = ui.rRev = ""; render(true); }
     else if (act === "clear-take") { ui.tWho = ui.tStatus = ""; render(true); }
     else if (act === "fsheet") { ui.fsheet = !!el.dataset.v; render(true); const x = document.getElementById("sheet-x"); if (x) x.focus(); else { const b = view.querySelector(".fbtn"); if (b) b.focus(); } }
+    else if (act === "find") { ui.find = !!el.dataset.v; if (ui.find) { ui.fq = ""; ui.sheet = null; ui.fsheet = false; ui.open.delete("acct"); } render(true); const q = document.getElementById("find-q"); if (q) q.focus(); }
+    else if (act === "find-go") {
+      const k = el.dataset.k, v = el.dataset.v || "";
+      const clearShop = () => { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ui.fNoQty = ""; ui.q = ""; };
+      if (k === "sector") { clearShop(); ui.fSector = v; go("shop"); }
+      else if (k === "block") { ui.rq = ui.rIn = ui.rRev = ""; ui.rBlock = v; go("recipes"); }
+      else if (k === "item") { clearShop(); ui.tWho = ui.tStatus = ""; go(el.dataset.tab); flashRow(v); }
+      else if (k === "pend") { ui.pStatus = ""; ui.pRec = ""; ui.pMe = false; go("pend"); const q = document.getElementById("pend-q"); if (q) { q.value = v; q.dispatchEvent(new Event("input", { bubbles: true })); } }
+    }
     else if (act === "clear-filters") { ui.fWho = ui.fStatus = ui.fRev = ui.fSector = ui.fStore = ui.fWhen = ui.fType = ui.fNoQty = ""; render(true); }
     else if (act === "logout") { queue = queue.filter(j => j.table !== "private"); saveQueue(); client.auth.signOut().then(() => location.reload()); }
   });
@@ -1562,6 +1617,7 @@ ${r.block === CAFE ? `<p class="note">Entra nas compras enquanto houver algum di
     if (t === "plano") t = localStorage.getItem("an-plano") || "menu";
     if (!TABS.includes(t)) t = "start";
     if (t === "log") ui.log = null;   // relê o histórico a cada visita
+    ui.find = false;
     ui.tab = t; localStorage.setItem("an-tab", t); ui.back = null; ui.sheet = null; ui.fsheet = false; ui.rec = null; ui.open.delete("acct");
     [...ui.open].filter(k => /^(q-|ep-|ec-|lk-|bulk-|add-|new)/.test(k)).forEach(k => ui.open.delete(k));
     [...ui.open].filter(k => /^(cm-|x-|ed-|ai-)/.test(k)).forEach(k => ui.open.delete(k));

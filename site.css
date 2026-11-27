@@ -867,3 +867,26 @@ h2.hrow { flex-wrap: wrap; }
 .loglist strong { font-weight: 700; }
 .loglist b { font-weight: 600; }
 .loglist small { display: block; margin-top: 3px; font-size: .86rem; color: var(--muted); line-height: 1.4; }
+
+/* busca geral e menu */
+.tr-r { display: inline-flex; align-items: center; gap: 6px; }
+.findbtn { flex: none; width: 44px; height: 44px; display: grid; place-items: center; background: none; border: 0; padding: 0; color: var(--gold-soft); cursor: pointer; border-radius: 50%; }
+.findbtn svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+.findbtn:active { background: rgba(255, 255, 255, .12); }
+.mini .findbtn { margin-left: auto; margin-right: -10px; }
+.mini .findbtn svg { width: 21px; height: 21px; }
+.sheet.find { min-height: 70dvh; }
+#view .sheet.find h3 { margin: 16px 0 6px; font: 700 .8rem var(--body); color: var(--gold-deep); }
+#view .sheet.find h3 small { font-weight: 600; color: var(--muted); margin-left: 4px; }
+#find-q { width: 100%; margin: 12px 0 0; min-height: 48px; font-size: 1rem; }
+.findnav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.findnav button { min-height: 46px; padding: 0 14px; text-align: left; background: var(--mist); border: 1px solid transparent; border-radius: 12px; font: 600 .95rem var(--body); color: var(--ink); cursor: pointer; }
+.findnav button[aria-current="page"] { background: #fff; border-color: var(--gold); }
+.findchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.findchips button { min-height: 40px; padding: 0 14px; background: #fff; border: 1px solid var(--line); border-radius: 99px; font: 500 .92rem var(--body); color: var(--ink); cursor: pointer; }
+.findchips small { margin-left: 7px; color: var(--gold-deep); font-weight: 700; font-size: .82rem; }
+.findnav button:active, .findchips button:active { background: var(--line); }
+li.flash { animation: row-flash 2.2s ease-out; }
+@keyframes row-flash { 0%, 55% { background: var(--warn-bg); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { li.flash { animation: none; outline: 2px solid var(--gold); } }
+@media (min-width: 900px) { .findnav { grid-template-columns: repeat(4, 1fr); } }
